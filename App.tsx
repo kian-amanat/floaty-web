@@ -3,7 +3,7 @@ import { View, StyleSheet, Pressable } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
-  useSharedValue, useAnimatedStyle, useDerivedValue, withTiming, withDelay, withSequence,
+  useSharedValue, useAnimatedRef, useAnimatedStyle, useDerivedValue, withTiming, withDelay, withSequence,
   interpolate, Extrapolation, Easing, runOnJS,
 } from 'react-native-reanimated';
 
@@ -15,7 +15,7 @@ import UserBadge from './src/components/UserBadge';
 import RightRail from './src/components/RightRail';
 import { RECORDS } from './src/data';
 import {
-  colors, u, SCREEN, FOCUS_W, FOCUS_H, FOCUS_R, SLOT, COLUMN_X, FOCUS_Y,
+  colors, u, SCREEN, CARD, FOCUS_W, FOCUS_H, FOCUS_R, SLOT, FOCUS_Y, LEAD, REST_INDEX,
 } from './src/theme';
 
 /* Timed off the capture by counting the photo's pixels frame by frame and
@@ -28,8 +28,10 @@ const OPEN = { duration: 950, easing: Easing.bezier(0.25, 0.1, 0.25, 1) };
 const SHUT = { duration: 420, easing: Easing.bezier(0.4, 0, 0.2, 1) };
 
 export default function App() {
-  const scrollY = useSharedValue(0);
-  const focusIndex = useSharedValue(0);
+  /* the column is parked a lead's worth in, so the scan's resting card is the
+     one squared on the first frame rather than card 1 */
+  const scrollY = useSharedValue(u(LEAD));
+  const focusIndex = useSharedValue(REST_INDEX);
   const expand = useSharedValue(0);   // 0 home .. 1 detail
   const chrome = useSharedValue(0);   // detail text + rail
   const intro = useSharedValue(0);    // launch reveal of the left rail + badge
@@ -52,18 +54,25 @@ export default function App() {
      3.35s, card 5 at 4.25, card 4 at 4.85, card 3 from 5.45 on. */
   const scan = useSharedValue(2);
 
-  useEffect(() => {
-    intro.value = withTiming(1, { duration: 1500, easing: Easing.out(Easing.cubic) });
-    /* Sampling the 4 -> 3 handover at 0.1s shows the morph is an ease-OUT, not
-       a symmetric one: card 3 is 33% square 0.1s in, 72% by 0.3s, then a long
-       tail to 100% around 1.0s. Cubic-out over the step duration tracks that
-       within a few percent. The two cards' squareness also sums to 1 the whole
-       way across (0.33+0.65, 0.57+0.43, 0.72+0.28), so the shape is handed
-       over rather than duplicated — which the linear falloff already gives.
-       Steps are quick through the down-sweep and slow into the final rest. */
+  /* the column, so the tab's marks can drive it */
+  const list = useAnimatedRef<Animated.ScrollView>();
+  const cardAt = useCallback(
+    (k: number) => u(LEAD) + (k - REST_INDEX) * u(SLOT),
+    [],
+  );
+  const scrollToCard = useCallback((k: number, animated = true) => {
+    list.current?.scrollTo({ y: cardAt(k), animated });
+  }, [list, cardAt]);
+  const focusedCard = useCallback(() => {
+    const i = Math.round(scan.value + (scrollY.value - u(LEAD)) / u(SLOT));
+    return Math.max(0, Math.min(RECORDS.length - 1, i));
+  }, [scan, scrollY]);
+
+  /* the intro sweep, kept callable so the tab can run it again */
+  const sweep = useCallback((delay: number) => {
     const step = Easing.inOut(Easing.cubic);   // no velocity jump between steps
     const rest = Easing.out(Easing.cubic);     // the measured settle onto card 3
-    scan.value = withDelay(2000, withSequence(
+    scan.value = withDelay(delay, withSequence(
       withTiming(2, { duration: 260, easing: step }),   // card 3  — opens here
       withTiming(1, { duration: 400, easing: step }),   // card 2
       withTiming(0, { duration: 400, easing: step }),   // card 1
@@ -74,6 +83,11 @@ export default function App() {
       withTiming(3, { duration: 500, easing: step }),   // card 4   (peak 4.85)
       withTiming(2, { duration: 1000, easing: rest })   // card 3   — settles ~5.9
     ));
+  }, [scan]);
+
+  useEffect(() => {
+    intro.value = withTiming(1, { duration: 1500, easing: Easing.out(Easing.cubic) });
+    sweep(2000);
     deal.forEach((v, i) => {
       /* measured off the capture: first card leaves the bottom edge at t=0
          and each next one follows 390ms later, taking ~1.3s to coast into
@@ -83,7 +97,7 @@ export default function App() {
         withTiming(1, { duration: 1300, easing: Easing.bezier(0.16, 1, 0.3, 1) })
       );
     });
-  }, [deal, intro]);
+  }, [deal, intro, sweep]);
 
   /* The handle is not parked at zero while the column deals in — the capture
      has it already 19% along at t=1.0 and creeping to 52% by t=3.0, where it
@@ -91,24 +105,51 @@ export default function App() {
      the launch sweep owns it first and scroll takes over from there. */
   const progress = useDerivedValue(() => {
     const max = u(SLOT) * (RECORDS.length - 1);
-    const scroll = max > 0 ? Math.min(Math.max(scrollY.value / max, 0), 1) : 0;
+    /* measured from the resting position, which now sits mid-track rather than
+       at zero — so the handle still reads 52% at rest, runs to 1 at the bottom
+       of the column and back to ~0.04 at the top. */
+    const scroll = max > 0 ? (scrollY.value - u(LEAD)) / max : 0;
     const settled = 0.19 + 0.33 * intro.value;
-    return Math.min(1, settled + scroll * (1 - 0.52));
+    return Math.min(1, Math.max(0, settled + scroll * 0.96));
   });
 
   const focusY = SCREEN.h * FOCUS_Y;
-  const fromLeft = u(COLUMN_X) - u(FOCUS_W) / 2;
-  /* the photo grows out of the card that is actually squared, so the origin
-     follows the opened index down the column rather than sitting on a line */
   const padTop = focusY - u(SLOT) / 2;
-  const [fromTop, setFromTop] = useState(focusY - u(FOCUS_H) / 2);
+
+  /* The photo grows out of the card that was actually tapped, so the origin has
+     to be that card's real geometry — not the focused card's. Only the squared
+     one is FOCUS_W x FOCUS_H with a 38 corner; every other card in the column
+     is a CARD-diameter circle, so starting the hero at the squircle meant
+     opening a circle popped shape and size in a single frame. The column also
+     lays out centred on the screen, not on COLUMN_X, which was a further 4-unit
+     jump sideways. */
+  const [origin, setOrigin] = useState(() => ({
+    left: SCREEN.w / 2 - u(FOCUS_W) / 2,
+    top: focusY - u(FOCUS_H) / 2,
+    w: u(FOCUS_W),
+    h: u(FOCUS_H),
+    r: u(FOCUS_R),
+  }));
 
   /* the rail does not leave with the photo — it holds through the whole grow
      and only then walks off, the mark first and quickest */
   const railGo = useSharedValue(0);
 
   const openCard = useCallback((i: number) => {
-    setFromTop(padTop + i * u(SLOT) + u(SLOT) / 2 - scrollY.value - u(FOCUS_H) / 2);
+    /* the same t the card itself uses, so the hero starts as whatever that card
+       is right now — circle, squircle, or part way between */
+    const focused = scan.value + (scrollY.value - u(LEAD)) / u(SLOT);
+    const t = Math.max(0, Math.min(1, 1 - Math.abs(focused - i)));
+    const sx = CARD / FOCUS_W + t * (1 - CARD / FOCUS_W);
+    const sy = CARD / FOCUS_H + t * (1 - CARD / FOCUS_H);
+    const w = u(FOCUS_W) * sx;
+    const h = u(FOCUS_H) * sy;
+    /* the card rounds an unscaled box and then scales it, so the corner you
+       actually see is the radius times the scale — at t=0 that lands on
+       CARD/2, i.e. the circle */
+    const r = (u(FOCUS_W) / 2 + t * (u(FOCUS_R) - u(FOCUS_W) / 2)) * sx;
+    const cy = padTop + u(LEAD) + i * u(SLOT) + u(SLOT) / 2 - scrollY.value;
+    setOrigin({ left: SCREEN.w / 2 - w / 2, top: cy - h / 2, w, h, r });
     setOpen(i);
     setBarFloating(true);
     expand.value = withTiming(1, OPEN);
@@ -119,7 +160,7 @@ export default function App() {
        linear clock, and each piece takes its own window out of it. */
     railGo.value = withDelay(600, withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.cubic) }));
     chrome.value = withTiming(1, { duration: 4600, easing: Easing.linear });
-  }, [expand, chrome, railGo, padTop, scrollY]);
+  }, [expand, chrome, railGo, padTop, scrollY, scan]);
 
   const closeCard = useCallback(() => {
     chrome.value = withTiming(0, { duration: 200 });
@@ -130,14 +171,47 @@ export default function App() {
     setBarFloating(false);
   }, [expand, chrome, railGo]);
 
+  /* The tab's three marks. The capture shows the selected state but never a
+     press, so what each one DOES is a choice, not a measurement — all three
+     drive machinery the screen already has rather than inventing new surface. */
+  const onFrame = useCallback(() => {
+    if (open !== null) { closeCard(); return; }
+    openCard(focusedCard());
+  }, [open, closeCard, openCard, focusedCard]);
+
+  const onLibrary = useCallback(() => {
+    if (open !== null) closeCard();
+    scrollToCard((focusedCard() + 1) % RECORDS.length);
+  }, [open, closeCard, scrollToCard, focusedCard]);
+
+  const onCapture = useCallback(() => {
+    if (open !== null) closeCard();
+    scrollToCard(REST_INDEX);
+    sweep(0);
+  }, [open, closeCard, scrollToCard, sweep]);
+
   /* the tapped card becomes the detail backdrop */
   const heroStyle = useAnimatedStyle(() => ({
-    left: interpolate(expand.value, [0, 1], [fromLeft, 0], Extrapolation.CLAMP),
-    top: interpolate(expand.value, [0, 1], [fromTop, 0], Extrapolation.CLAMP),
-    width: interpolate(expand.value, [0, 1], [u(FOCUS_W), SCREEN.w], Extrapolation.CLAMP),
-    height: interpolate(expand.value, [0, 1], [u(FOCUS_H), SCREEN.h], Extrapolation.CLAMP),
-    borderRadius: interpolate(expand.value, [0, 1], [u(FOCUS_R), 0], Extrapolation.CLAMP),
+    left: interpolate(expand.value, [0, 1], [origin.left, 0], Extrapolation.CLAMP),
+    top: interpolate(expand.value, [0, 1], [origin.top, 0], Extrapolation.CLAMP),
+    width: interpolate(expand.value, [0, 1], [origin.w, SCREEN.w], Extrapolation.CLAMP),
+    height: interpolate(expand.value, [0, 1], [origin.h, SCREEN.h], Extrapolation.CLAMP),
+    borderRadius: interpolate(expand.value, [0, 1], [origin.r, 0], Extrapolation.CLAMP),
     opacity: expand.value > 0 ? 1 : 0,
+  }));
+
+  /* The card and the hero are different crops of the same photo — 640x640 for
+     the thumbnail, 900x1950 for the full frame — so under `cover` in the
+     182x179 card box they frame completely different things: the thumbnail
+     shows the whole square, the full frame shows a 45% band across its middle.
+     Cutting from one to the other at expand 0 was the jump on close. The card's
+     own thumbnail now sits underneath the full frame for the whole travel and
+     the full frame fades over it across a short window just off the bottom, so
+     what the hero shows at the hand-off is exactly what the card underneath is
+     already showing. Short window on purpose: it is a blend of two different
+     crops, so it reads as a soft settle rather than a double exposure. */
+  const fullFade = useAnimatedStyle(() => ({
+    opacity: interpolate(expand.value, [0.05, 0.20], [0, 1], Extrapolation.CLAMP),
   }));
 
   /* In the capture the column is never faded: at t=6.80 cards 1 and 2 are
@@ -153,6 +227,7 @@ export default function App() {
 
       <Animated.View style={[StyleSheet.absoluteFill, homeStyle]}>
         <HomeScreen
+          listRef={list}
           scrollY={scrollY}
           focusIndex={focusIndex}
           cardsIn={deal}
@@ -167,8 +242,13 @@ export default function App() {
         <>
           <Animated.View style={[styles.hero, heroStyle]}>
             <Animated.Image
-              source={record.full ?? record.image}
+              source={record.image}
               style={styles.heroImage}
+              resizeMode="cover"
+            />
+            <Animated.Image
+              source={record.full ?? record.image}
+              style={[styles.heroFull, fullFade]}
               resizeMode="cover"
             />
           </Animated.View>
@@ -187,7 +267,7 @@ export default function App() {
           exactly as in the capture: opening a card slides the photo up behind
           them, it never displaces or replays them. */}
       <UserBadge />
-      <RightRail />
+      <RightRail onFrame={onFrame} onLibrary={onLibrary} onCapture={onCapture} />
 
       <View style={styles.barSlot} pointerEvents="box-none">
         {/* the pill carries its white container on the home screen too, not just
@@ -204,5 +284,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.paper },
   hero: { position: 'absolute', overflow: 'hidden', backgroundColor: colors.sky },
   heroImage: { width: '100%', height: '100%' },
+  heroFull: { position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' },
   barSlot: { position: 'absolute', left: 0, right: 0, bottom: u(24) },
 });

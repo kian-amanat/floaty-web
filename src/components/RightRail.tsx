@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, Pressable } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, interpolate, Extrapolation, Easing,
 } from 'react-native-reanimated';
@@ -9,15 +9,9 @@ import { colors, u } from '../theme';
 /* Right-edge tab, measured off perspective-corrected frames of the capture in
    430x932 reference units, with the timings read frame by frame at 30fps.
 
-   SHAPE — two slabs, not one. The steep 45-degree runs at the very top and
-   bottom of the left-edge profile belong to a NARROWER, TALLER slab sitting
-   behind (33 x 267, y 529 -> 796); the wider front slab (43 x 226,
-   y 557 -> 783) only takes the silhouette over once its edge passes x 397, so
-   the back one juts out past it at each end. Both are the same black —
-   sampling across the tab gives 0-7 everywhere — so the pair reads purely as
-   a stepped silhouette. The corners are chamfered but not knife-sharp: the
-   profile eases over ~10 units at each turn, so every vertex carries a small
-   radius.
+   SHAPE — two slabs, not one; the measured dimensions are in the block above
+   the constants below. Both are the same black — sampling across the tab gives
+   0-7 everywhere — so the pair reads purely as a stepped silhouette.
 
    TIMING — the tab is not there at 1.07 and first breaks the edge at ~1.08.
    It does NOT snap open: growth is a long ease-out that is still creeping at
@@ -28,14 +22,16 @@ import { colors, u } from '../theme';
 /* TWO parts, and I had to average five corrected frames to see it properly.
    The left edge is not one line: below the top chamfer it holds a plateau at
    x 395 (y 555-573), then steps out again to x 387 (y 593-737), then returns
-   to 395 (y 739-760) before the bottom chamfer. Two overlapping shapes, both
-   chamfered at 45 degrees:
+   to 395 (y 739-760) before the bottom chamfer. Two overlapping shapes:
 
      REAR   narrower but taller — x 395-430 (35 wide), y 524-793 (269)
      FRONT  wider but shorter   — x 387-430 (43 wide), y 540-779 (239)
 
-   Each 45-degree chamfer was solved for its own origin against the averaged
-   profile rather than eyeballed; the rear's three samples agree to 0.2.
+   Each chamfer was solved for its own origin against the averaged profile
+   rather than eyeballed; the rear's three samples agree to 0.2. Both measured
+   45 degrees. The rear is now deliberately a little steeper than that (42
+   vertical over 35 horizontal, ~50 degrees) with a tighter corner, on
+   request — a styling choice, not a measurement.
 
    So the rear is proud by 16 above and 14 below, and the plateaus are simply
    where the front has not yet reached and the rear is all you can see. My
@@ -43,13 +39,16 @@ import { colors, u } from '../theme';
    rounding. */
 const W = 43;                   // front, the wider one
 const BACK_W = 35;              // rear, narrower
+const BACK_CHAMFER = 42;        // vertical run of the rear chamfer; > BACK_W
+                                // tilts it steeper than the measured 45
 const SLOT_TOP = 524;           // rear's top, absolute
 const H = 269;                  // rear: 524 -> 793
-const FRONT_TOP = 16;           // front: 540 -> 779 absolute
-const FRONT_H = 239;
-const MARKS = [83, 139, 195];   // 607 / 663 / 719 absolute, unchanged
-const FRONT_R = 6;
-const BACK_R = 4;
+const FRONT_TOP = 19;           // front: 540 -> 779 absolute
+const FRONT_H = 230;
+const MARKS = [83, 135, 190];   // 607 / 663 / 719 absolute, unchanged
+const HIT = 40;                 // press target, centred on each mark
+const FRONT_R = 4;
+const BACK_R = 2.5;             // rear corner, sharper than the front's
 
 /* measured growth. Height leads width the whole way, and the tail is long —
    this is what makes it read as opening rather than popping. */
@@ -81,16 +80,58 @@ function roundedPath(pts: Pt[], r: number): string {
 }
 
 const BACK_PATH = roundedPath([
-  { x: W, y: 0 }, { x: W - BACK_W, y: BACK_W },
-  { x: W - BACK_W, y: H - BACK_W }, { x: W, y: H },
+  { x: W, y: 0 }, { x: W - BACK_W, y: BACK_CHAMFER },
+  { x: W - BACK_W, y: H - BACK_CHAMFER }, { x: W, y: H },
 ], BACK_R);
 const FRONT_PATH = roundedPath([
   { x: W, y: FRONT_TOP }, { x: 0, y: FRONT_TOP + W },
   { x: 0, y: FRONT_TOP + FRONT_H - W }, { x: W, y: FRONT_TOP + FRONT_H },
 ], FRONT_R);
 
-export default function RightRail({ at }: { at?: number }) {
+/* The glyphs were painted straight onto the tab with nothing to press. The
+   hit box is deliberately larger than the glyph and centred on the measured
+   mark, so the target is a usable size without moving anything visible. */
+function Mark({
+  top, anim, selected, onPress, label, children,
+}: {
+  top: number;
+  anim: any;
+  selected: boolean;
+  onPress: () => void;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Animated.View style={[styles.mark, { top: u(top - HIT / 2) }, anim]}>
+      <Pressable
+        onPress={onPress}
+        hitSlop={u(6)}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ selected }}
+        style={({ pressed }) => [styles.hit, pressed && styles.hitDown]}
+      >
+        {children}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+export default function RightRail({
+  at, onFrame, onLibrary, onCapture,
+}: {
+  at?: number;
+  onFrame?: () => void;
+  onLibrary?: () => void;
+  onCapture?: () => void;
+}) {
   const T = useSharedValue(at ?? 0);
+  /* The capture draws the folder filled white and the other two as dim
+     outlines, which is the tab telling you which one is selected — so the
+     three marks are one selector and the lit glyph is its value. */
+  const [active, setActive] = useState(1);
+  const acts = [onFrame, onLibrary, onCapture];
+  const press = (i: number) => { setActive(i); acts[i]?.(); };
 
   useEffect(() => {
     if (at !== undefined) { T.value = at; return; }
@@ -123,7 +164,7 @@ export default function RightRail({ at }: { at?: number }) {
 
   return (
     <View style={styles.slot} pointerEvents="box-none">
-      <Animated.View style={[styles.panel, panel]}>
+      <Animated.View style={[styles.panel, panel]} pointerEvents="none">
         <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`}>
           {/* rear first: narrower, taller, proud at both ends */}
           <Path d={BACK_PATH} fill={colors.panel} />
@@ -131,32 +172,39 @@ export default function RightRail({ at }: { at?: number }) {
         </Svg>
       </Animated.View>
 
-      <Animated.View style={[styles.mark, { top: u(MARKS[0] - 9) }, reticle]}>
+      <Mark top={MARKS[0]} anim={reticle} label="Framing"
+            selected={active === 0} onPress={() => press(0)}>
         <Svg width={u(18)} height={u(18)} viewBox="0 0 24 24">
           <Path
             d="M3 8.4V3.4h5M21 8.4V3.4h-5M3 15.6v5h5M21 15.6v5h-5"
-            stroke={DIM} strokeWidth="2.8" fill="none" strokeLinecap="round"
+            stroke={active === 0 ? colors.white : DIM}
+            strokeWidth="2.8" fill="none" strokeLinecap="round"
           />
         </Svg>
-      </Animated.View>
+      </Mark>
 
-      <Animated.View style={[styles.mark, { top: u(MARKS[1] - 8) }, folder]}>
+      <Mark top={MARKS[1]} anim={folder} label="Library"
+            selected={active === 1} onPress={() => press(1)}>
         <Svg width={u(21)} height={u(16)} viewBox="0 0 24 18">
           <Path
             d="M2.4 2 L8.8 2 L11.2 4.8 L21.6 4.8 A1.2 1.2 0 0 1 22.8 6 L22.8 14.8
                A1.2 1.2 0 0 1 21.6 16 L2.4 16 A1.2 1.2 0 0 1 1.2 14.8 L1.2 3.2
                A1.2 1.2 0 0 1 2.4 2 Z"
-            fill={colors.white}
+            fill={active === 1 ? colors.white : DIM}
           />
         </Svg>
-      </Animated.View>
+      </Mark>
 
-      <Animated.View style={[styles.mark, { top: u(MARKS[2] - 9.5) }, camera]}>
+      <Mark top={MARKS[2]} anim={camera} label="Capture"
+            selected={active === 2} onPress={() => press(2)}>
         <Svg width={u(19)} height={u(19)} viewBox="0 0 24 24">
-          <Rect x="3" y="5.6" width="18" height="13.6" rx="2.4" stroke={DIM} strokeWidth="2.3" fill="none" />
-          <Circle cx="12" cy="12.4" r="3.3" stroke={DIM} strokeWidth="2.3" fill="none" />
+          <Rect x="3" y="5.6" width="18" height="13.6" rx="2.4"
+                stroke={active === 2 ? colors.white : DIM} strokeWidth="2.3" fill="none" />
+          <Circle cx="12" cy="12.4" r="3.3"
+                  stroke={active === 2 ? colors.white : DIM} strokeWidth="2.3" fill="none" />
         </Svg>
-      </Animated.View>
+      </Mark>
+
     </View>
   );
 }
@@ -171,5 +219,10 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   panel: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 },
-  mark: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  mark: {
+    position: 'absolute', left: 0, right: 0, height: u(HIT),
+    alignItems: 'center', justifyContent: 'center',
+  },
+  hit: { width: u(HIT), height: u(HIT), alignItems: 'center', justifyContent: 'center' },
+  hitDown: { opacity: 0.5, transform: [{ scale: 0.88 }] },
 });

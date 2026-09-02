@@ -1,18 +1,18 @@
-import React from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import Animated, {
   useAnimatedScrollHandler, useAnimatedStyle,
-  interpolate, Extrapolation, SharedValue,
+  interpolate, Extrapolation, SharedValue, AnimatedRef,
 } from 'react-native-reanimated';
 import DotGrid from '../components/DotGrid';
 import { RECORDS } from '../data';
 import {
   colors, mono, u, SCREEN, CARD, FOCUS_W, FOCUS_H, FOCUS_R, SLOT, COLUMN_X, FOCUS_Y,
-  CARD_ENTRY_Y,
+  CARD_ENTRY_Y, LEAD, REST_INDEX,
 } from '../theme';
 
 function Item({
-  index, scrollY, image, onPress, padTop, focusY, hidden, scan,
+  index, scrollY, image, onPress, padTop, focusY, lead, hidden, scan,
 }: {
   index: number;
   scrollY: SharedValue<number>;
@@ -20,6 +20,7 @@ function Item({
   onPress: () => void;
   padTop: number;
   focusY: number;
+  lead: number;
   hidden: SharedValue<number>;
   scan: SharedValue<number>;
 }) {
@@ -29,8 +30,12 @@ function Item({
        is what pinned the square to the top card: padTop is defined so that
        index 0 lands on that line, so card 1 sat at distance zero forever.
        The scan rests on 2 — the middle of the column — which is where the
-       capture leaves it. */
-    const focused = scan.value + scrollY.value / u(SLOT);
+       capture leaves it, and `lead` is the scroll room that sits above that
+       resting point. Subtracting it is what lets the first two cards be
+       reached: without it scrollY bottomed out at 0 with the scan already on
+       2, so the range covered focused 2..6 — cards 4 and 5 plus two dead
+       slots — and 0 and 1 were off the negative end. */
+    const focused = scan.value + (scrollY.value - lead) / u(SLOT);
     const t = interpolate(Math.abs(focused - index), [0, 1], [1, 0], Extrapolation.CLAMP);
 
     /* The box stays FOCUS_W x FOCUS_H and the morph rides on transforms, so
@@ -70,8 +75,9 @@ function Item({
 }
 
 export default function HomeScreen({
-  scrollY, onOpen, focusIndex, cardsIn, intro, scan, expand,
+  listRef, scrollY, onOpen, focusIndex, cardsIn, intro, scan, expand,
 }: {
+  listRef: AnimatedRef<Animated.ScrollView>;
   scrollY: SharedValue<number>;
   onOpen: (index: number) => void;
   focusIndex: SharedValue<number>;
@@ -81,15 +87,38 @@ export default function HomeScreen({
   intro: SharedValue<number>;
 }) {
   const focusY = SCREEN.h * FOCUS_Y;
-  const padTop = focusY - u(SLOT) / 2;
-  const padBottom = SCREEN.h - focusY - u(SLOT) / 2;
+  /* screen y of the first slot when the column is at rest — the deal-in still
+     measures its travel against this, so it is unaffected by the lead */
+  const slotTop = focusY - u(SLOT) / 2;
+  const lead = u(LEAD);
+  /* the lead is taken out of the bottom padding rather than added to the
+     total, so the content height and the overall scroll range are unchanged;
+     only the origin moves. The column still rests exactly where it did. */
+  const padTop = slotTop + lead;
+  const padBottom = Math.max(0, SCREEN.h - focusY - u(SLOT) / 2 - lead);
+  /* Owned by App so the right-hand tab can drive the column too. A plain
+     useRef does not reach through Animated.ScrollView — scrollTo silently
+     no-ops and the list stays at 0 while scrollY reads the lead, so the column
+     looks right until the first touch and then jumps two cards. */
+  const list = listRef;
+  const parked = useRef(false);
+  const park = useCallback(() => {
+    if (parked.current) return;
+    list.current?.scrollTo({ y: lead, animated: false });
+  }, [lead, list]);
+  /* content size is fixed, so onContentSizeChange alone would do on Android;
+     the timeout covers the case where it fires before the ref is attached. */
+  useEffect(() => {
+    const t = setTimeout(park, 0);
+    return () => clearTimeout(t);
+  }, [park]);
 
   /* Opening a card sweeps the left-hand rail off to the right rather than
      dissolving it in place — the date, the mark, the clock and the assignment
      label all travel together and are gone before the photo has finished. */
   const onScroll = useAnimatedScrollHandler((e) => {
     scrollY.value = e.contentOffset.y;
-    focusIndex.value = Math.round(e.contentOffset.y / u(SLOT));
+    focusIndex.value = Math.round((e.contentOffset.y - lead) / u(SLOT)) + REST_INDEX;
   });
 
   return (
@@ -98,7 +127,12 @@ export default function HomeScreen({
 
       {/* the column */}
       <Animated.ScrollView
+        ref={list}
         style={StyleSheet.absoluteFill}
+        contentOffset={{ x: 0, y: lead }}
+        onContentSizeChange={park}
+        onMomentumScrollEnd={() => { parked.current = true; }}
+        onScrollEndDrag={() => { parked.current = true; }}
         contentContainerStyle={{
           paddingTop: padTop,
           paddingBottom: padBottom,
@@ -116,8 +150,9 @@ export default function HomeScreen({
             index={i}
             scrollY={scrollY}
             image={r.image}
-            padTop={padTop}
+            padTop={slotTop}
             focusY={focusY}
+            lead={lead}
             hidden={cardsIn[i]}
             scan={scan}
             onPress={() => onOpen(i)}

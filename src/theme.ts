@@ -38,3 +38,9 @@ export const SLOT = 157;      // vertical pitch between cards
 export const COLUMN_X = 211;  // centre of the card column
 export const CARD_ENTRY_Y = 855;  // cards deal in from here, just off the bottom
 export const FOCUS_Y = 0.125;  // focus line, as a fraction of screen height
+
+/* The scan settles on index 2, so the column has to be scrollable two slots
+   back from its resting position for the first two cards to be able to reach
+   the square. LEAD is that room, and the list is parked at it on mount. */
+export const REST_INDEX = 2;
+export const LEAD = REST_INDEX * SLOT;
