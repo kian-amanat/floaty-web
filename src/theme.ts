@@ -6,7 +6,11 @@ export const REF_W = 430;
 export const REF_H = 932;
 
 const win = Dimensions.get('window');
-export const SCREEN = { w: win.width, h: win.height };
+/* Sampled once, so a zero here is permanent: if this module is evaluated
+   before the window has a size, u() returns 0 for the rest of the session and
+   every screen collapses silently, with no error to point at it. Falling back
+   to the reference frame keeps the layout usable instead. */
+export const SCREEN = { w: win.width || REF_W, h: win.height || REF_H };
 
 /** reference units -> device points */
 export const u = (n: number) => (n * SCREEN.w) / REF_W;

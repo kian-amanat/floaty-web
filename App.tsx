@@ -13,6 +13,8 @@ import LeftRail from './src/components/LeftRail';
 import ExploreBar from './src/components/ExploreBar';
 import UserBadge from './src/components/UserBadge';
 import RightRail from './src/components/RightRail';
+import WeightScreen from './src/screens/WeightScreen';
+import { useRoute } from './src/route';
 import { RECORDS } from './src/data';
 import {
   colors, u, SCREEN, CARD, FOCUS_W, FOCUS_H, FOCUS_R, SLOT, FOCUS_Y, LEAD, REST_INDEX,
@@ -36,6 +38,7 @@ export default function App() {
   const chrome = useSharedValue(0);   // detail text + rail
   const intro = useSharedValue(0);    // launch reveal of the left rail + badge
   const [open, setOpen] = useState<number | null>(null);
+  const view = useRoute();
   const [barFloating, setBarFloating] = useState(false);
 
   /* the column deals itself out on launch — one shared value per card, so the
@@ -221,6 +224,17 @@ export default function App() {
 
   const record = open === null ? null : RECORDS[open];
 
+  /* Addressed by URL: /weight for the dial, anything else for the scan
+     screen. Every hook above has already run, so the early return is safe. */
+  if (view === 'weight') {
+    return (
+      <View style={styles.weightRoot}>
+        <StatusBar style="light" />
+        <WeightScreen />
+      </View>
+    );
+  }
+
   return (
     <GestureHandlerRootView style={styles.root}>
       <StatusBar style={open === null ? 'dark' : 'light'} />
@@ -282,6 +296,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.paper },
+  weightRoot: { flex: 1, backgroundColor: '#222322' },
   hero: { position: 'absolute', overflow: 'hidden', backgroundColor: colors.sky },
   heroImage: { width: '100%', height: '100%' },
   heroFull: { position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' },
