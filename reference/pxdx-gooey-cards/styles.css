@@ -1,0 +1,243 @@
+/* ---------------------------------------------------------------------------
+   PXDX Sketch Book — gooey card interaction
+   Authored at 672 x 848 ("stage units") and uniformly scaled by app.js (--s).
+--------------------------------------------------------------------------- */
+
+:root {
+  --stage-w: 672;
+  --stage-h: 848;
+
+  --paper:      #dddddd;
+  --ink:        #000000;
+  --dot:        rgba(0, 0, 0, 0.085);
+  --dot-pitch:  8.15px;
+
+  --disc:       134px;   /* black disc behind each photo            (r 67) */
+  --ball:       96px;    /* the travelling metaball                 (r 48) */
+  --ring:       0.881;   /* photo scale when active -> 8px black ring     */
+
+  --pill-h:     29px;
+  --pill-y:     90.5px;  /* pill centre, below the card centre            */
+  --chip-h:     19px;
+
+  --grotesk: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Inter,
+             "Segoe UI", Arial, sans-serif;
+  --mono:    ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  background: var(--paper);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+.defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+.measure {
+  position: absolute;
+  visibility: hidden;
+  white-space: pre;
+  font: 600 11px/1 var(--grotesk);
+  letter-spacing: 0.1px;
+}
+
+/* --- stage ---------------------------------------------------------------- */
+
+.viewport {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.stage {
+  position: relative;
+  width: calc(var(--stage-w) * 1px);
+  height: calc(var(--stage-h) * 1px);
+  flex: none;
+  transform: scale(var(--s, 1));
+  transform-origin: center center;
+
+  background-color: var(--paper);
+  background-image: radial-gradient(circle at 1px 1px, var(--dot) 0.65px, transparent 0);
+  background-size: var(--dot-pitch) var(--dot-pitch);
+  background-position: 0.5px 0.5px;
+
+  /* live values written every frame by app.js */
+  --ball-x: 208px;
+  --ball-y: 407px;
+  --ball-s: 0;
+  --reveal: 0;
+  --awake: 0;     /* both cards gain their black border while the piece is awake */
+}
+
+.stage.is-engaged { cursor: none; }
+.stage > * { pointer-events: none; }
+
+/* --- the liquid layer ----------------------------------------------------- */
+
+.goo {
+  position: absolute;
+  inset: 0;
+  filter: url(#goo);
+}
+
+.disc,
+.ball {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+.disc {
+  left: var(--cx);
+  top: var(--cy);
+  width: var(--disc);
+  height: var(--disc);
+  margin: calc(var(--disc) / -2) 0 0 calc(var(--disc) / -2);
+  transform: translate3d(var(--push-x, 0px), var(--push-y, 0px), 0);
+}
+
+.disc[data-card="0"] { --cx: 208px; --cy: 407px; }
+.disc[data-card="1"] { --cx: 465px; --cy: 407px; }
+
+.ball {
+  left: 0;
+  top: 0;
+  width: var(--ball);
+  height: var(--ball);
+  margin: calc(var(--ball) / -2) 0 0 calc(var(--ball) / -2);
+  transform: translate3d(var(--ball-x), var(--ball-y), 0) scale(var(--ball-s));
+}
+
+/* --- dot + arrow, riding on the ball -------------------------------------- */
+
+.ball-content {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 7.2px;
+  height: 14px;
+  margin: -7px 0 0 -3.75px;   /* the dot sits on the ball's centre */
+  color: #fff;
+
+  transform: translate3d(var(--ball-x), var(--ball-y), 0);
+  opacity: var(--reveal);
+  filter: blur(calc((1 - var(--reveal)) * 5px));
+}
+
+.cursor-dot {
+  width: 7.5px;
+  height: 7.5px;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.arrow {
+  width: 13.5px;
+  height: 8px;
+  flex: none;
+  overflow: visible;
+}
+
+/* --- card (photo + pill) -------------------------------------------------- */
+
+.card {
+  position: absolute;
+  left: var(--cx);
+  top: var(--cy);
+  width: 0;
+  height: 0;
+
+  --act: 0;
+  --pill: 0;
+  --push-x: 0px;
+  --push-y: 0px;
+}
+
+.photo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--disc);
+  height: var(--disc);
+  margin: calc(var(--disc) / -2) 0 0 calc(var(--disc) / -2);
+  border-radius: 50%;
+  background-size: 102.5%;
+  background-position: center;
+  transform: translate3d(var(--push-x), var(--push-y), 0)
+             scale(calc(1 - (1 - var(--ring)) * var(--awake)));
+}
+
+/* --- price pill ----------------------------------------------------------- */
+
+.pill {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + var(--pill-y));
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: var(--pill-h);
+  padding: 0 4px 0 12px;
+  border-radius: calc(var(--pill-h) / 2);
+  background: var(--ink);
+  white-space: nowrap;
+
+  transform: translate3d(-50%, -50%, 0) scale(calc(0.86 + 0.14 * var(--pill)));
+  transform-origin: 50% 50%;
+  opacity: var(--pill);
+  filter: blur(calc((1 - var(--pill)) * 7px));
+}
+
+.price {
+  font: 500 16px/1 var(--grotesk);
+  letter-spacing: -0.2px;
+  color: #fff;
+}
+
+.chip {
+  display: grid;
+  place-items: center;
+  height: var(--chip-h);
+  width: var(--chip-w, 19px);
+  border-radius: calc(var(--chip-h) / 2);
+  background: var(--chip-bg, #555);
+  overflow: hidden;
+}
+
+.chip-text {
+  font: 600 11px/1 var(--grotesk);
+  letter-spacing: 0.1px;
+  color: var(--chip-fg, #fff);
+  opacity: var(--chip-o, 0);
+}
+
+/* --- corner slug ---------------------------------------------------------- */
+
+.meta {
+  position: absolute;
+  left: 23px;
+  bottom: 20px;
+  display: flex;
+  gap: 16px;
+  font: 400 8px/12.2px var(--mono);
+  letter-spacing: 0.7px;
+  color: rgba(0, 0, 0, 0.13);
+  user-select: none;
+}
+
+.meta-lines { display: flex; flex-direction: column; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ball-content, .pill { filter: none; }
+}

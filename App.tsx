@@ -14,7 +14,9 @@ import ExploreBar from './src/components/ExploreBar';
 import UserBadge from './src/components/UserBadge';
 import RightRail from './src/components/RightRail';
 import WeightScreen from './src/screens/WeightScreen';
-import { useRoute } from './src/route';
+import GooeyScreen from './src/screens/GooeyScreen';
+import AuthScreen from './src/ember/AuthScreen';
+import { useRoute, go } from './src/route';
 import { RECORDS } from './src/data';
 import {
   colors, u, SCREEN, CARD, FOCUS_W, FOCUS_H, FOCUS_R, SLOT, FOCUS_Y, LEAD, REST_INDEX,
@@ -224,8 +226,32 @@ export default function App() {
 
   const record = open === null ? null : RECORDS[open];
 
-  /* Addressed by URL: /weight for the dial, anything else for the scan
-     screen. Every hook above has already run, so the early return is safe. */
+  /* Addressed by URL: /login and /signup for the Ember auth pair, /weight for
+     the dial, /gooey for the sketch-book cards, the scan screen otherwise. Every hook above has already run, so the early
+     returns are safe.
+
+     The gooey screen needs the gesture root as much as the scan screen does —
+     its pan handler is what carries the finger into the simulation. */
+  if (view === 'login' || view === 'signup') {
+    return (
+      <GestureHandlerRootView style={styles.authRoot}>
+        <StatusBar style="light" />
+        {/* one instance across both routes — remounting per route is what
+            made the change a reload instead of a transition */}
+        <AuthScreen mode={view} onMode={go} />
+      </GestureHandlerRootView>
+    );
+  }
+
+  if (view === 'gooey') {
+    return (
+      <GestureHandlerRootView style={styles.gooeyRoot}>
+        <StatusBar style="dark" />
+        <GooeyScreen />
+      </GestureHandlerRootView>
+    );
+  }
+
   if (view === 'weight') {
     return (
       <View style={styles.weightRoot}>
@@ -296,6 +322,8 @@ export default function App() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.paper },
+  gooeyRoot: { flex: 1, backgroundColor: '#dddddd' },
+  authRoot: { flex: 1, backgroundColor: '#000000' },
   weightRoot: { flex: 1, backgroundColor: '#222322' },
   hero: { position: 'absolute', overflow: 'hidden', backgroundColor: colors.sky },
   heroImage: { width: '100%', height: '100%' },

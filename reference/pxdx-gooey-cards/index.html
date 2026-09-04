@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PXDX Sketch Book — Gooey Cards</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- One metaball filter for the whole stage: the two discs and the single
+     travelling ball are blurred together, then hard-thresholded by the alpha
+     row of the colour matrix back into a crisp silhouette. -->
+<svg class="defs" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="goo" x="-6%" y="-8%" width="112%" height="116%"
+            primitiveUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" result="goo"
+        values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0 0 0 22 -10"/>
+    </filter>
+  </defs>
+</svg>
+
+<div class="viewport">
+  <main class="stage" id="stage">
+
+    <!-- the liquid layer -->
+    <div class="goo">
+      <span class="disc" data-card="0"></span>
+      <span class="disc" data-card="1"></span>
+      <span class="ball"></span>
+    </div>
+
+    <div class="card" data-card="0" style="--cx:208px; --cy:407px;">
+      <div class="photo" style="background-image:url(assets/avatar-01.png)"></div>
+      <div class="pill">
+        <span class="price">$189</span>
+        <span class="chip"><span class="chip-text">-56</span></span>
+      </div>
+    </div>
+
+    <div class="card" data-card="1" style="--cx:465px; --cy:407px;">
+      <div class="photo" style="background-image:url(assets/avatar-02.png)"></div>
+      <div class="pill">
+        <span class="price">$89</span>
+        <span class="chip"><span class="chip-text">+56</span></span>
+      </div>
+    </div>
+
+    <!-- the ball carries the cursor dot and the arrow -->
+    <div class="ball-content">
+      <span class="cursor-dot"></span>
+      <svg class="arrow" viewBox="0 0 24 14" aria-hidden="true">
+        <path d="M0 7h21M15 1l6 6-6 6" fill="none" stroke="currentColor"
+              stroke-width="1.9" stroke-linecap="square" stroke-linejoin="miter"/>
+      </svg>
+    </div>
+
+    <div class="meta">
+      <span class="meta-id">TEST0326-03</span>
+      <span class="meta-lines">
+        <span>PXDX SKETCH BOOK</span>
+        <span>EXPLORING DETAILS</span>
+        <span>UI TRENDS</span>
+        <span>IB0326007</span>
+      </span>
+    </div>
+
+  </main>
+</div>
+
+<span class="measure" id="measure" aria-hidden="true"></span>
+<script src="app.js"></script>
+</body>
+</html>
