@@ -1,8 +1,9 @@
 /* ---------------------------------------------------------------------------
    The haze behind the screen.
 
-   Three soft masses, well under the fold, drifting slowly and leaning toward
-   the finger. The movement *is* the blur moving — no particles, nothing rising
+   Four soft masses drifting slowly and leaning toward the finger — three high,
+   where the heading sits, and one low so the foot of the screen is not dead
+   flat black. The movement *is* the blur moving — no particles, nothing rising
    through the frame — so the background reads as light shifting behind the
    surface rather than as something animating on top of it.
 
@@ -39,9 +40,11 @@ const TAU_LEAN = 0.85;
 /* Kept high and dim. The accent is for the controls; down here it is only
    meant to keep the black from going flat. */
 const MASS = [
-  { kx: 0.20, ky: 0.10, r: 0.72, lean: 46, period: 23, hue: c.hot, a: 0.30 },
-  { kx: 0.88, ky: 0.20, r: 0.58, lean: 28, period: 31, hue: c.hotSoft, a: 0.19 },
-  { kx: 0.55, ky: 0.02, r: 0.50, lean: 62, period: 27, hue: c.hotDeep, a: 0.26 },
+  { kx: 0.20, ky: 0.10, r: 0.72, lean: 46, period: 23, hue: c.hot, a: 0.44 },
+  { kx: 0.88, ky: 0.20, r: 0.58, lean: 28, period: 31, hue: c.hotSoft, a: 0.30 },
+  { kx: 0.55, ky: 0.02, r: 0.50, lean: 62, period: 27, hue: c.hotDeep, a: 0.38 },
+  /* one low ember, so the foot of the screen is not dead flat black */
+  { kx: 0.30, ky: 0.86, r: 0.52, lean: 20, period: 37, hue: c.hotDeep, a: 0.16 },
 ];
 
 export default function Aurora({ field, intro }: { field: Field; intro: SharedValue<number> }) {
@@ -82,10 +85,11 @@ export default function Aurora({ field, intro }: { field: Field; intro: SharedVa
       <Svg width={W} height={H} style={StyleSheet.absoluteFill}>
         <Defs>
           <LinearGradient id="scrim" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#08080A" stopOpacity={0.1} />
-            <Stop offset="0.34" stopColor="#08080A" stopOpacity={0.5} />
-            <Stop offset="0.62" stopColor="#08080A" stopOpacity={0.9} />
-            <Stop offset="1" stopColor="#08080A" stopOpacity={0.98} />
+            <Stop offset="0" stopColor="#08080A" stopOpacity={0.04} />
+            <Stop offset="0.34" stopColor="#08080A" stopOpacity={0.44} />
+            <Stop offset="0.62" stopColor="#08080A" stopOpacity={0.87} />
+            <Stop offset="0.88" stopColor="#08080A" stopOpacity={0.94} />
+            <Stop offset="1" stopColor="#08080A" stopOpacity={0.9} />
           </LinearGradient>
         </Defs>
         <Rect x="0" y="0" width={W} height={H} fill="url(#scrim)" />

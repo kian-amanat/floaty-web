@@ -28,7 +28,7 @@ execFileSync('npx', ['tsc',
   '--module', 'commonjs', '--target', 'es2020', '--skipLibCheck',
 ], { cwd: ROOT, stdio: 'inherit' });
 const { step, initialState } = require(path.join(OUT, 'step.js'));
-const { CARDS, TRANSFER, ABSORB } = require(path.join(OUT, 'constants.js'));
+const { CARDS, TRANSFER, ABSORB, HOLD_AFTER_THROW } = require(path.join(OUT, 'constants.js'));
 
 const DT = 1 / 60;
 const C0 = CARDS[0], C1 = CARDS[1];
@@ -267,6 +267,60 @@ console.log('\n5d. once the throw lands the piece puts itself away');
   drag(s, [C1.cx, C1.cy], [C1.cx, C1.cy], 0.4);
   ok('and it comes back for the next throw', s.awake > 0.5 && s.pill[1] > 0.5,
     `awake ${s.awake.toFixed(2)}`);
+}
+
+// 5e ------------------------------------------------------------------------
+console.log('\n5e. the throw plays out in order: fly, catch, then clear away');
+{
+  const s = initialState();
+  drag(s, [C0.cx, C0.cy], [C0.cx, C0.cy], 0.2); settle(s, C0.cx, C0.cy);
+
+  /* in flight */
+  let maxReveal = 0, flightFrames = 0;
+  const n = Math.round(0.6 / DT);
+  for (let i = 1; i <= n; i++) {
+    const x = C0.cx + (C1.cx - C0.cx) * (i / n);
+    step(s, DT, s.done ? null : { x, y: 407 });
+    if (s.ballX > C0.cx + 80 && s.ballX < C1.cx - 55) { flightFrames++; maxReveal = Math.max(maxReveal, s.reveal); }
+  }
+  ok('dot and arrow stay hidden the whole way across',
+    flightFrames > 0 && maxReveal < 0.15, `${flightFrames} frames, brightest ${maxReveal.toFixed(3)}`);
+
+  /* the catch */
+  let peakShove = 0, ringAtPeak = 0, pillAtPeak = 0;
+  for (let i = 0; i < Math.round(3.5 / DT); i++) {
+    step(s, DT, held(s, false, 0, 0));
+    const sh = Math.abs(s.pushX[1]);
+    if (sh > peakShove) { peakShove = sh; ringAtPeak = s.awake; pillAtPeak = s.pill[1]; }
+  }
+  ok('the catching avatar is visibly shoved', peakShove > 5,
+    `peak ${peakShove.toFixed(1)}px`);
+  ok('and the shove peaks while it can still be seen',
+    ringAtPeak > 0.9 && pillAtPeak > 0.9,
+    `ring ${ringAtPeak.toFixed(2)}, pill ${pillAtPeak.toFixed(2)} at the peak`);
+
+  /* then the clear-away */
+  ok('ring and pill leave together', Math.abs(s.awake - s.pill[1]) < 0.05,
+    `ring ${s.awake.toFixed(3)} vs pill ${s.pill[1].toFixed(3)}`);
+}
+
+// 5f ------------------------------------------------------------------------
+console.log('\n5f. and it leaves slowly, not abruptly');
+{
+  const s = initialState();
+  drag(s, [C0.cx, C0.cy], [C0.cx, C0.cy], 0.2); settle(s, C0.cx, C0.cy);
+  drag(s, [C0.cx, C0.cy], [C1.cx, C1.cy], 0.6);
+  while (!s.done) step(s, DT, held(s, false, 0, 0));
+
+  let held90 = 0, toGone = 0, k = 0;
+  while (k < Math.round(8 / DT) && (s.awake > 0.05 || s.pill[1] > 0.05)) {
+    step(s, DT, held(s, false, 0, 0)); k++;
+    if (s.awake > 0.9) held90 = k;
+    toGone = k;
+  }
+  ok('held up while the catch plays', held90 * DT >= HOLD_AFTER_THROW * 0.8,
+    `${(held90 * DT).toFixed(2)}s at full`);
+  ok('then takes its time going', toGone * DT > 1.2, `gone after ${(toGone * DT).toFixed(2)}s`);
 }
 
 // 6 -------------------------------------------------------------------------

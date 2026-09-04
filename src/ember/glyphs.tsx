@@ -52,6 +52,13 @@ export const Tick = ({ size = 20, tint = '#fff' }: P) => (
   </Svg>
 );
 
+export const Cross = ({ size = 14, tint = '#fff' }: P) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24">
+    <Path d="M6 6 18 18M18 6 6 18" fill="none" stroke={tint}
+      strokeWidth={2.2} strokeLinecap="round" />
+  </Svg>
+);
+
 export const Google = ({ size = 18 }: P) => (
   <Svg width={size} height={size} viewBox="0 0 48 48">
     <Path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.6 30.2.5 24 .5 14.6.5 6.5 5.9 2.6 13.7l7.8 6.1C12.3 14 17.7 9.5 24 9.5Z" />

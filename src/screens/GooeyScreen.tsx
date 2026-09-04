@@ -117,7 +117,7 @@ export default function GooeyScreen() {
       pushVX: [s.pushVX[0], s.pushVX[1]],
       pushVY: [s.pushVY[0], s.pushVY[1]],
       values: [s.values[0], s.values[1]],
-      holder: s.holder, active: s.active, done: s.done,
+      holder: s.holder, active: s.active, done: s.done, doneFor: s.doneFor,
     };
 
     /* A landed throw finishes the piece: the ring closes, the pill goes with it
@@ -129,7 +129,7 @@ export default function GooeyScreen() {
        carry it the rest of the way in rather than pull it home, or a quick
        flick would undo itself. A gesture that never reached a card eases all
        the way back down on its own. */
-    if (fresh.value === 1) { next.done = false; fresh.value = 0; }
+    if (fresh.value === 1) { next.done = false; next.doneFor = 0; fresh.value = 0; }
 
     let ptr: Pointer = null;
     if (!next.done) {

@@ -46,6 +46,18 @@ export const TAU_REVEAL = 0.1;
 export const TAU_PILL_IN = 0.2;
 export const TAU_PILL_OUT = 0.07;
 
+/* Once a throw has landed the piece is being put away rather than interrupted,
+   so the ring and the pill leave together and unhurriedly. The snappier figures
+   above still apply to a gesture that is merely abandoned. */
+export const TAU_DONE_OUT = 0.55;
+
+/* The catching disc is shoved by the arriving bubble and springs back, and that
+   peaks about a third of a second after it lands. Everything is held up until
+   it has played, so the avatar is seen to take the throw rather than reacting
+   behind its own fade. This is the one part of the piece on a clock, and it is
+   choreography after the gesture is over rather than any part of the gesture. */
+export const HOLD_AFTER_THROW = 0.5;
+
 export const CHIP_IDLE_BG: RGB = [0x55, 0x55, 0x55];
 export const CHIP_IDLE_FG: RGB = [0xff, 0xff, 0xff];
 

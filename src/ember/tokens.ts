@@ -23,6 +23,9 @@ export const c = {
   mute: '#6E6D6A',
   ghost: '#484745',
 
+  /* the only other colour on the screen, and only when something is wrong */
+  bad: '#E4573D',
+
   pane: 'rgba(255,255,255,0.028)',
   paneLift: 'rgba(255,255,255,0.05)',
   hair: 'rgba(255,255,255,0.09)',
@@ -55,7 +58,6 @@ export const t = {
   field: 15,
   button: 15,
   micro: 13,
-  wordmark: 13,
 };
 
 /* No webfont is bundled, so this asks for the best face each platform already

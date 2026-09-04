@@ -18,7 +18,7 @@ import {
   DISC_R, BALL_R, R_HIT, SHOW_ARROW, SETTLE_REF,
   PUSH_GAIN, PUSH_STIFF, PUSH_DAMP, PUSH_MAX,
   TAU_BALL, TAU_ACT, TAU_WAKE_IN, TAU_WAKE_OUT, TAU_SCALE, TAU_REVEAL,
-  TAU_PILL_IN, TAU_PILL_OUT,
+  TAU_PILL_IN, TAU_PILL_OUT, TAU_DONE_OUT, HOLD_AFTER_THROW,
 } from './constants';
 import { clamp, lerp, window01, approach } from './sim';
 
@@ -39,6 +39,8 @@ export type State = {
   /* a throw has just landed; the piece is finished and should go back to rest
      until the next gesture picks it up */
   done: boolean;
+  /* seconds since it landed, so the catch can play before the piece is put away */
+  doneFor: number;
 };
 
 export function initialState(): State {
@@ -48,7 +50,7 @@ export function initialState(): State {
     act: [0, 0], pill: [0, 0], pushX: [0, 0], pushY: [0, 0], count: [0, 0],
     vx: 0, vy: 0, pushVX: [0, 0], pushVY: [0, 0],
     values: [CARDS[0].value, CARDS[1].value],
-    holder: -1, active: -1, done: false,
+    holder: -1, active: -1, done: false, doneFor: 0,
   };
 }
 
@@ -57,6 +59,9 @@ export function step(s: State, dt: number, ptr: Pointer): void {
   'worklet';
 
   const on = ptr !== null;
+  if (s.done) s.doneFor += dt;
+  /* the landing is still being watched, so nothing starts leaving yet */
+  const watching = s.done && s.doneFor < HOLD_AFTER_THROW;
   const px = on ? ptr!.x : 0;
   const py = on ? ptr!.y : 0;
 
@@ -86,13 +91,21 @@ export function step(s: State, dt: number, ptr: Pointer): void {
   if (on) {
     s.ballX += (lerp(homeX, px, emerge) - s.ballX) * kBall;
     s.ballY += (lerp(homeY, py, emerge) - s.ballY) * kBall;
+  } else if (s.done && s.holder >= 0) {
+    /* A landed throw keeps sinking into the avatar that caught it. Without
+       this the bubble stops dead the moment it counts as arrived, and the disc
+       only ever feels the run-up rather than the arrival itself. */
+    s.ballX += (CARDS[s.holder].cx - s.ballX) * kBall;
+    s.ballY += (CARDS[s.holder].cy - s.ballY) * kBall;
   }
   s.vx = dt > 0 ? (s.ballX - wasX) / dt : 0;
   s.vy = dt > 0 ? (s.ballY - wasY) / dt : 0;
 
   /* the borders belong to the piece, not to either card: they open while the
      pointer is anywhere on the stage and close again once it leaves */
-  s.awake += ((on ? 1 : 0) - s.awake) * approach(dt, on ? TAU_WAKE_IN : TAU_WAKE_OUT);
+  const awakeAim = on || watching ? 1 : 0;
+  s.awake += (awakeAim - s.awake) *
+    approach(dt, awakeAim ? TAU_WAKE_IN : (s.done ? TAU_DONE_OUT : TAU_WAKE_OUT));
   const lag = on ? Math.hypot(px - s.ballX, py - s.ballY) : 0;
 
   /* The two reaches overlap in the middle, so "within R_HIT" can be true of
@@ -141,8 +154,10 @@ export function step(s: State, dt: number, ptr: Pointer): void {
     s.pushY[i] = clamp(s.pushY[i] + s.pushVY[i] * dt, -PUSH_MAX, PUSH_MAX);
 
     s.act[i] += ((engaged ? 1 : 0) - s.act[i]) * kAct;
-    s.pill[i] += ((engaged ? 1 : 0) - s.pill[i]) *
-      approach(dt, engaged ? TAU_PILL_IN : TAU_PILL_OUT);
+    /* the catching card keeps its pill up for the length of the hold */
+    const pillAim = engaged || (watching && i === s.holder) ? 1 : 0;
+    s.pill[i] += (pillAim - s.pill[i]) *
+      approach(dt, pillAim ? TAU_PILL_IN : (s.done ? TAU_DONE_OUT : TAU_PILL_OUT));
 
     const countAim = engaged ? TRANSFER : 0;
     s.count[i] += (countAim - s.count[i]) * kBall;

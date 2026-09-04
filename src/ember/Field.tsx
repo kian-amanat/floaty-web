@@ -8,6 +8,10 @@
    The browser draws its own focus ring on the underlying input — a blue box
    that has nothing to do with this design — so it is suppressed here and the
    hairline is the only focus affordance.
+
+   An error takes the hairline over from focus and states the problem under the
+   field. It is announced on submit rather than while typing, so the form does
+   not argue with someone half way through their address.
 --------------------------------------------------------------------------- */
 
 import React, { useCallback, useState } from 'react';
@@ -30,6 +34,7 @@ const GLYPH = { email: Mail, password: Lock, name: User };
 
 export default function Field({
   label, placeholder, kind, value, onChangeText, keyboardType, autoComplete,
+  error, onSubmitEditing, returnKeyType, onFocusChange,
 }: {
   label: string;
   placeholder: string;
@@ -38,14 +43,26 @@ export default function Field({
   onChangeText: (v: string) => void;
   keyboardType?: KeyboardTypeOptions;
   autoComplete?: 'email' | 'password' | 'new-password' | 'name';
+  error?: string;
+  onSubmitEditing?: () => void;
+  returnKeyType?: 'next' | 'done' | 'go';
+  /* so a caller can reveal something alongside the field while it is being
+     filled in — the strength meter opens on the password field this way */
+  onFocusChange?: (focused: boolean) => void;
 }) {
   const [hidden, setHidden] = useState(kind === 'password');
   const focus = useSharedValue(0);
   const shown = useSharedValue(0);
   const Glyph = GLYPH[kind];
 
-  const onFocus = useCallback(() => { focus.value = withTiming(1, EASE); }, [focus]);
-  const onBlur = useCallback(() => { focus.value = withTiming(0, EASE); }, [focus]);
+  const onFocus = useCallback(() => {
+    focus.value = withTiming(1, EASE);
+    onFocusChange?.(true);
+  }, [focus, onFocusChange]);
+  const onBlur = useCallback(() => {
+    focus.value = withTiming(0, EASE);
+    onFocusChange?.(false);
+  }, [focus, onFocusChange]);
   const toggle = useCallback(() => {
     setHidden((h) => {
       shown.value = withSpring(h ? 1 : 0, { damping: 17, stiffness: 220 });
@@ -53,9 +70,23 @@ export default function Field({
     });
   }, [shown]);
 
-  const box = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(focus.value, [0, 1], [c.pane, c.paneLift]),
-    borderColor: interpolateColor(focus.value, [0, 1], [c.hair, hot(0.62)]),
+  /* an error outranks focus: the hairline stays red while it stands */
+  const bad = useSharedValue(0);
+  React.useEffect(() => {
+    bad.value = withTiming(error ? 1 : 0, EASE);
+  }, [error, bad]);
+
+  const box = useAnimatedStyle(() => {
+    const base = interpolateColor(focus.value, [0, 1], [c.hair, hot(0.62)]);
+    return {
+      backgroundColor: interpolateColor(focus.value, [0, 1], [c.pane, c.paneLift]),
+      borderColor: interpolateColor(bad.value, [0, 1], [base as string, c.bad]),
+    };
+  });
+
+  const note = useAnimatedStyle(() => ({
+    opacity: bad.value,
+    transform: [{ translateY: interpolate(bad.value, [0, 1], [-3, 0]) }],
   }));
 
   const cap = useAnimatedStyle(() => ({
@@ -91,6 +122,8 @@ export default function Field({
           autoComplete={autoComplete}
           selectionColor={c.hot}
           underlineColorAndroid="transparent"
+          onSubmitEditing={onSubmitEditing}
+          returnKeyType={returnKeyType}
         />
 
         {kind === 'password' && (
@@ -104,12 +137,18 @@ export default function Field({
           </Pressable>
         )}
       </Animated.View>
+
+      {/* kept mounted so its height is part of the layout from the start and
+          the form does not jump when a message appears */}
+      <View style={styles.noteSlot}>
+        {!!error && <Animated.Text style={[styles.note, note]}>{error}</Animated.Text>}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  group: { marginBottom: 14 },
+  group: { marginBottom: 6 },
   cap: {
     fontFamily: sans,
     fontSize: t.label,
@@ -140,4 +179,6 @@ const styles = StyleSheet.create({
     }),
   },
   eye: { width: 18, height: 18 },
+  noteSlot: { minHeight: 16, paddingTop: 3 },
+  note: { fontFamily: sans, fontSize: 12, color: c.bad },
 });
