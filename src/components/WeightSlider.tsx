@@ -100,9 +100,11 @@ const TAIL = 180;
    obvious approximation and it is the wrong one: even thirteen layers leave
    visible contour bands in the haze, because each layer has a hard edge. One
    blurred stroke has none. Width and sigma are fitted to the sideways falloff
-   (.66/.475/.317/.205/.106/0 at 0/10/20/30/40/48px). */
-const HALO_W = 32;
-const HALO_SD = 16.5;
+   (.66/.475/.317/.205/.106/0 at 0/10/20/30/40/48px), then opened up a little
+   from there: against the reference the fitted pair reads as a haze on the
+   line rather than something lighting the ruler. */
+const HALO_W = 35;
+const HALO_SD = 19.5;
 /* A second, softer pass sits inside the halo so the peak reads as a
    concentrated source rather than an evenly-lit patch. Same blurred-line
    construction, so the two merge into one falloff instead of banding. Kept
@@ -113,6 +115,20 @@ const CORE_SD = 11;
 const CORE_REACH = 58;
 const HALO_UP = 95;                               // fade reaches this far above
 const HALO_DOWN = 95;                             // and this far below
+
+/* Outside the halo sits a much wider, dimmer spill. The halo alone reads as a
+   haze clinging to the line; what the reference has is a lamp behind it, with
+   light landing well out across the ticks and up onto the numbers. That is a
+   third blurred pass rather than a stronger halo — pushing the halo itself
+   this wide either blows out the line's own edge or, at a lower opacity,
+   flattens the whole thing into an even wash with no source in it.
+   Taller as well as wider: a lamp spills further along the line than across
+   it, so this reaches past the labels either side of the thumb. */
+const SPILL_W = 46;
+const SPILL_SD = 33;
+const SPILL_UP = 150;
+const SPILL_DOWN = 150;
+const SPILL_OPACITY = 0.72;
 
 const PAGE = '#222322';
 const TRACK = '#767676';
@@ -323,6 +339,10 @@ export default function WeightSlider({
     y1: knobY.value - CORE_REACH,
     y2: knobY.value + CORE_REACH,
   }));
+  const spill = useAnimatedProps(() => ({
+    y1: knobY.value - SPILL_UP,
+    y2: knobY.value + SPILL_DOWN,
+  }));
   const majorTicks = useAnimatedProps(() => ({ d: ticksPath(knobY.value, true) }));
   const minorTicks = useAnimatedProps(() => ({ d: ticksPath(knobY.value, false) }));
   const leftRegion = useAnimatedProps(() => ({ d: leftOfLinePath(knobY.value) }));
@@ -383,6 +403,12 @@ export default function WeightSlider({
               <FeGaussianBlur stdDeviation={HALO_SD} />
             </Filter>
             <Filter
+              id="spillBlur" filterUnits="userSpaceOnUse"
+              x={VIEW_X - SPILL_SD * 4} y={VIEW_Y - SPILL_SD * 4}
+              width={CANVAS_W + SPILL_SD * 8} height={CANVAS_H + SPILL_SD * 8}>
+              <FeGaussianBlur stdDeviation={SPILL_SD} />
+            </Filter>
+            <Filter
               id="coreBlur" filterUnits="userSpaceOnUse"
               x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H}
             >
@@ -424,6 +450,24 @@ export default function WeightSlider({
               <Stop offset="0.87" stopColor="#171717" />
               <Stop offset="1" stopColor="#000000" />
             </AGradient>
+            {/* the spill's own envelope — same shape as the halo's, just
+                carried much further along the line */}
+            <AGradient id="spillFade" gradientUnits="userSpaceOnUse"
+                       x1={0} x2={0} animatedProps={spill}>
+              <Stop offset="0" stopColor="#000000" />
+              <Stop offset="0.18" stopColor="#1F1F1F" />
+              <Stop offset="0.32" stopColor="#4A4A4A" />
+              <Stop offset="0.42" stopColor="#8A8A8A" />
+              <Stop offset="0.5" stopColor="#FFFFFF" />
+              <Stop offset="0.58" stopColor="#8A8A8A" />
+              <Stop offset="0.68" stopColor="#4A4A4A" />
+              <Stop offset="0.82" stopColor="#1F1F1F" />
+              <Stop offset="1" stopColor="#000000" />
+            </AGradient>
+            <Mask id="spillMask" maskUnits="userSpaceOnUse"
+                  x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H}>
+              <Rect x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H} fill="url(#spillFade)" />
+            </Mask>
             <Mask id="haloMask" maskUnits="userSpaceOnUse"
                   x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H}>
               <Rect x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H} fill="url(#haloFade)" />
@@ -447,6 +491,14 @@ export default function WeightSlider({
               and under the line so the line stays the brightest thing */}
           {/* blurred first, then clipped — so the haze is symmetric about the
               line and simply stops at it, with nothing on the knob side */}
+          <G clipPath="url(#leftOfLine)" mask="url(#spillMask)">
+            <APath
+              animatedProps={line}
+              stroke={accent} strokeWidth={SPILL_W} strokeOpacity={SPILL_OPACITY}
+              fill="none" strokeLinecap="butt"
+              filter="url(#spillBlur)"
+            />
+          </G>
           <G clipPath="url(#leftOfLine)" mask="url(#haloMask)">
             <APath
               animatedProps={line}
@@ -644,9 +696,11 @@ const sheet = (S: number) => StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 26 * S,
     /* the capture's ruler stems measure 2px on an 18px cap height (.111),
-       which is about a 400 in the system face — a step lighter on request */
+       which is about a 400 in the system face. Set two steps under that:
+       against the reference these read as thin as the readout, which is a 200,
+       rather than the semi they were drifting toward. */
     lineHeight: 26 * S,
-    fontWeight: '300',
+    fontWeight: '200',
   },
   readout: {
     position: 'absolute',
