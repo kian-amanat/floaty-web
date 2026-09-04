@@ -105,7 +105,11 @@ function Rule({ met, text }: { met: boolean; text: string }) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { paddingTop: 2, paddingBottom: 12 },
+  /* Sits right under the password field it reads: the segments are a readout
+     of that input, so the gap above them is tighter than the gap to whatever
+     comes next. The field's own error no longer reserves room when it is not
+     showing, so this is the whole of the space above. */
+  wrap: { paddingTop: 0, paddingBottom: 26 },
   bars: { flexDirection: 'row', gap: 6 },
   seg: {
     flex: 1,
