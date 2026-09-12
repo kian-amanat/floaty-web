@@ -63,9 +63,12 @@ const METER_SLOT = 146;
    arriving rather than merely appearing. Opacity leads the movement slightly —
    a row is already faintly there before it finishes settling, which is what
    stops a long stagger feeling like a series of pop-ins. */
-const LEAD = 260;      // the light comes up before anything moves
-const STEP = 115;      // between one row and the next
-const RUN = 760;
+/* The form used to be nine rows at 115ms apart behind a 260ms lead, each
+   taking 760ms — the last field settled at 1.94s, which is a long time to
+   look at an unusable form. Same lead, same stagger, same curve, at ~62%. */
+const LEAD = 140;      // the light comes up before anything moves
+const STEP = 70;       // between one row and the next
+const RUN = 520;
 const EASE_OUT = Easing.bezier(0.16, 1, 0.3, 1);
 const LIFT = 26;
 
@@ -108,7 +111,7 @@ export default function AuthScreen({
   const intro = useSharedValue(STILL ? 1 : 0);
   useEffect(() => {
     if (STILL) return;
-    intro.value = withTiming(1, { duration: 1500, easing: Easing.out(Easing.cubic) });
+    intro.value = withTiming(1, { duration: 900, easing: Easing.out(Easing.cubic) });
   }, [intro]);
 
   /* 0 signing in, 1 creating — the one value the whole morph reads from */

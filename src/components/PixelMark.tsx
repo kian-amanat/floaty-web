@@ -8,10 +8,11 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Rect } from 'react-native-svg';
+/* `G` is taken by the grid size below */
+import Svg, { Rect, G as SvgG } from 'react-native-svg';
 import { colors } from '../theme';
 
-const AnimatedRect = Animated.createAnimatedComponent(Rect);
+const AnimatedG = Animated.createAnimatedComponent(SvgG);
 
 /*
  * ============================================================
@@ -108,11 +109,9 @@ function StaticGlyph({
 
 function MovingLineCopy({
   sourceX,
-  progress,
   color,
 }: {
   sourceX: number;
-  progress: SharedValue<number>;
   color: string;
 }) {
   /*
@@ -124,33 +123,16 @@ function MovingLineCopy({
 
   return (
     <>
-      {Y_POSITIONS.map((y) => {
-        const animatedProps = useAnimatedProps(() => {
-          /*
-           * Continuous phase.
-           *
-           * The modulo is calculated on the UI thread,
-           * so the visible copy wraps without React
-           * getting involved.
-           */
-          const cycle = progress.value % 1;
-
-          return {
-            x: sourceX + cycle * TRAVEL_DISTANCE,
-          };
-        });
-
-        return (
-          <AnimatedRect
-            key={`${sourceX}-${y}`}
-            y={y}
-            width={1}
-            height={1}
-            fill={color}
-            animatedProps={animatedProps}
-          />
-        );
-      })}
+      {Y_POSITIONS.map((y) => (
+        <Rect
+          key={`${sourceX}-${y}`}
+          x={sourceX}
+          y={y}
+          width={1}
+          height={1}
+          fill={color}
+        />
+      ))}
     </>
   );
 }
@@ -192,6 +174,10 @@ export default function PixelMark({
     };
   }, [progress]);
 
+  const travel = useAnimatedProps(() => ({
+    transform: `translate(${(progress.value % 1) * TRAVEL_DISTANCE} 0)`,
+  }));
+
   return (
     <View
       style={{
@@ -214,14 +200,16 @@ export default function PixelMark({
         {/* MOVING COPIES                                    */}
         {/* ================================================= */}
 
-        {SOURCE_LINES.map((sourceX) => (
-          <MovingLineCopy
-            key={sourceX}
-            sourceX={sourceX}
-            progress={progress}
-            color={color}
-          />
-        ))}
+        {/* Every copy travels by the same amount — only where it starts
+            differs, and that is static. One animated transform on the group
+            therefore does what fifteen animated `x` attributes were doing, and
+            each of those was an SVG attribute write forcing a re-raster, on
+            the screen the app opens on, forever. */}
+        <AnimatedG animatedProps={travel}>
+          {SOURCE_LINES.map((sourceX) => (
+            <MovingLineCopy key={sourceX} sourceX={sourceX} color={color} />
+          ))}
+        </AnimatedG>
       </Svg>
     </View>
   );

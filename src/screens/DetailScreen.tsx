@@ -20,10 +20,15 @@ export default function DetailScreen({
 }) {
   /* Each readout runs on its own clock rather than off slices of one linear
      value — a window on a linear clock moves linearly, which is what made
-     these read mechanically. Delays are the ones measured off the capture
-     (pick at 6.40): caption up by ~8.0, heading from ~8.2, number from ~9.2,
-     so 1.5s / 1.8s / 2.8s after the tap. Mount happens on the tap, so a delay
-     from mount is a delay from the pick.
+     these read mechanically. Mount happens on the tap, so a delay from mount
+     is a delay from the pick.
+
+     The capture's own delays were 1.5 / 1.8 / 2.3 / 2.6s after the tap, with
+     the last number still arriving at 4.0 — the screen spent four seconds
+     assembling itself. These are those delays at roughly half, which keeps the
+     order and the spacing between them and only shortens the wait. The ratios
+     are what make it read as one sequence rather than four; scale them
+     together if this wants tuning again.
 
      Everything is transform + opacity only, so nothing here triggers layout. */
   const EASE = Easing.bezier(0.22, 1, 0.36, 1);
@@ -42,10 +47,10 @@ export default function DetailScreen({
         capT.value = 1; headT.value = 1; teleT.value = 1; numT.value = 1;
         return;
       }
-      capT.value  = withDelay(1500, withTiming(1, { duration: 700,  easing: EASE }));
-      headT.value = withDelay(1800, withTiming(1, { duration: 1000, easing: EASE }));
-      teleT.value = withDelay(2300, withTiming(1, { duration: 800,  easing: EASE }));
-      numT.value  = withDelay(2600, withTiming(1, { duration: 1400, easing: EASE }));
+      capT.value  = withDelay(650,  withTiming(1, { duration: 480, easing: EASE }));
+      headT.value = withDelay(820,  withTiming(1, { duration: 620, easing: EASE }));
+      teleT.value = withDelay(1080, withTiming(1, { duration: 540, easing: EASE }));
+      numT.value  = withDelay(1280, withTiming(1, { duration: 820, easing: EASE }));
     };
 
     /* The probe must never be able to swallow the sequence: if it is missing,
@@ -113,7 +118,7 @@ export default function DetailScreen({
         </View>
 
         <Animated.View style={[styles.azimuth, azimuthIn]}>
-          <TypeOut text={record.azimuth} style={styles.azimuthText} speed={55} delay={1850} />
+          <TypeOut text={record.azimuth} style={styles.azimuthText} speed={34} delay={840} />
         </Animated.View>
 
 

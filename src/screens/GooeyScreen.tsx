@@ -60,9 +60,15 @@ import { clamp, lerp, mixRgb, rgbStr } from '../gooey/sim';
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const AnimatedInput = Animated.createAnimatedComponent(TextInput);
 
+/* JPEG at 360px, not the 548px PNGs these started as. They are photographs,
+   so PNG was paying for lossless coding it could not use, and the alpha it
+   carried is never seen — the container clips to a circle inside the image's
+   own edge. 380KB -> 48KB, which is the difference between the faces popping
+   in after the stage has drawn and being there with it. 360 covers the
+   largest the disc is ever drawn (~280px at dpr2 on a desktop window). */
 const AVATARS = [
-  require('../../assets/gooey/avatar-01.png'),
-  require('../../assets/gooey/avatar-02.png'),
+  require('../../assets/gooey/avatar-01.jpg'),
+  require('../../assets/gooey/avatar-02.jpg'),
 ];
 
 /* The chip opens to fit its own label: the original measured '-56' at 11px/600

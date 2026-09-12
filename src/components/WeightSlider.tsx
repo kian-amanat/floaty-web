@@ -103,10 +103,19 @@ const TAIL = 180;
    (.66/.475/.317/.205/.106/0 at 0/10/20/30/40/48px), then opened up a little
    from there: against the reference the fitted pair reads as a haze on the
    line rather than something lighting the ruler. */
-/* Filter regions are sized at 3 sigma, not 4: a gaussian has 99.7% of its
-   weight inside three, so the fourth is invisible and costs area. Across the
-   three passes that is about a fifth of the pixels blurred on every frame of a
-   drag, for no change on screen. */
+/* All three glow passes share one filter region, and it is the smallest one
+   that can hold the result rather than the whole canvas.
+
+   Two things bound it. The glow is clipped to the left of the line, and the
+   line never gets past TRACK_X, so nothing survives to the right of that.
+   And output beyond the canvas is never drawn, so margin outside it — which
+   is what sizing a region at n sigma buys — is blurred and then thrown away.
+
+   That takes the three passes from ~2.8 Mpx a frame to ~0.75 at dpr 2, on a
+   filter that reruns on every frame of a drag. Nothing about the result
+   changes; the pixels that went away were never on screen. */
+const GLOW_X = VIEW_X;
+const GLOW_W = TRACK_X + 8 - VIEW_X;
 const HALO_W = 35;
 const HALO_SD = 19.5;
 /* A second, softer pass sits inside the halo so the peak reads as a
@@ -402,20 +411,17 @@ export default function WeightSlider({
                 yellow while the line and readout had gone lime */}
             <Filter
               id="haloBlur" filterUnits="userSpaceOnUse"
-              x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H}
-            >
+              x={GLOW_X} y={VIEW_Y} width={GLOW_W} height={CANVAS_H}>
               <FeGaussianBlur stdDeviation={HALO_SD} />
             </Filter>
             <Filter
               id="spillBlur" filterUnits="userSpaceOnUse"
-              x={VIEW_X - SPILL_SD * 3} y={VIEW_Y - SPILL_SD * 3}
-              width={CANVAS_W + SPILL_SD * 6} height={CANVAS_H + SPILL_SD * 6}>
+              x={GLOW_X} y={VIEW_Y} width={GLOW_W} height={CANVAS_H}>
               <FeGaussianBlur stdDeviation={SPILL_SD} />
             </Filter>
             <Filter
               id="coreBlur" filterUnits="userSpaceOnUse"
-              x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H}
-            >
+              x={GLOW_X} y={VIEW_Y} width={GLOW_W} height={CANVAS_H}>
               <FeGaussianBlur stdDeviation={CORE_SD} />
             </Filter>
             <AGradient id="coreFade" gradientUnits="userSpaceOnUse"

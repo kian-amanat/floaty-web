@@ -231,8 +231,14 @@ export default function UserBadge({
      */
     T.value = 0;
 
+    /* T is an index into the measured timeline, so the duration is a speed
+       control rather than a curve: the profile is unchanged, it just plays
+       faster. Down from 2.4s at the reference rate — the badge is the first
+       thing the eye goes to on this screen, so it arriving last was most of
+       why the opening read as slow. It now lands with the bottom bar rather
+       than a half second behind the rail. */
     T.value = withTiming(2.4, {
-      duration: 2400,
+      duration: 900,
       easing: Easing.linear,
     });
   }, [T, at]);

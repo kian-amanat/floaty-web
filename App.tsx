@@ -28,8 +28,13 @@ import {
    move, not the 620ms I had. The shape is a gentle S, easing in off the card
    and settling long, so the old bezier(0.22, 1, ...) — which is almost
    instant off the line — was the wrong curve as well as the wrong length. */
-const OPEN = { duration: 950, easing: Easing.bezier(0.25, 0.1, 0.25, 1) };
-const SHUT = { duration: 420, easing: Easing.bezier(0.4, 0, 0.2, 1) };
+/* The capture's own expansion was ~950ms. Shortened along with everything
+   else on this screen: it is the move the whole detail view waits on, so it
+   sets the floor for how soon anything else can arrive. */
+const OPEN = { duration: 700, easing: Easing.bezier(0.25, 0.1, 0.25, 1) };
+/* Coming back is quicker than going out — you already know where it lands,
+   so the collapse only has to stay legible, not sell anything. */
+const SHUT = { duration: 280, easing: Easing.bezier(0.4, 0, 0.2, 1) };
 
 export default function App() {
   /* the column is parked a lead's worth in, so the scan's resting card is the
@@ -78,28 +83,32 @@ export default function App() {
     const step = Easing.inOut(Easing.cubic);   // no velocity jump between steps
     const rest = Easing.out(Easing.cubic);     // the measured settle onto card 3
     scan.value = withDelay(delay, withSequence(
-      withTiming(2, { duration: 260, easing: step }),   // card 3  — opens here
-      withTiming(1, { duration: 400, easing: step }),   // card 2
-      withTiming(0, { duration: 400, easing: step }),   // card 1
-      withTiming(1, { duration: 400, easing: step }),   // card 2   (peak 3.35)
-      withTiming(2, { duration: 300, easing: step }),   // card 3
-      withTiming(3, { duration: 300, easing: step }),   // card 4
-      withTiming(4, { duration: 400, easing: step }),   // card 5   (peak 4.25)
-      withTiming(3, { duration: 500, easing: step }),   // card 4   (peak 4.85)
-      withTiming(2, { duration: 1000, easing: rest })   // card 3   — settles ~5.9
+      /* The capture's own step lengths were 260/400/400/400/300/300/400/500
+         /1000, settling at ~5.9s. These are those at ~62%: the walk and its
+         rhythm are unchanged, it simply is not still going half a minute into
+         the screen. Scale them together if this wants tuning. */
+      withTiming(2, { duration: 160, easing: step }),   // card 3  — opens here
+      withTiming(1, { duration: 250, easing: step }),   // card 2
+      withTiming(0, { duration: 250, easing: step }),   // card 1
+      withTiming(1, { duration: 250, easing: step }),   // card 2
+      withTiming(2, { duration: 185, easing: step }),   // card 3
+      withTiming(3, { duration: 185, easing: step }),   // card 4
+      withTiming(4, { duration: 250, easing: step }),   // card 5
+      withTiming(3, { duration: 310, easing: step }),   // card 4
+      withTiming(2, { duration: 620, easing: rest })    // card 3   — settles
     ));
   }, [scan]);
 
   useEffect(() => {
-    intro.value = withTiming(1, { duration: 1500, easing: Easing.out(Easing.cubic) });
-    sweep(2000);
+    intro.value = withTiming(1, { duration: 900, easing: Easing.out(Easing.cubic) });
+    sweep(1100);
     deal.forEach((v, i) => {
-      /* measured off the capture: first card leaves the bottom edge at t=0
-         and each next one follows 390ms later, taking ~1.3s to coast into
-         its slot on a long ease-out */
+      /* The capture had each card follow 390ms after the last, taking ~1.3s
+         to coast in — the fifth was still arriving at 2.9s. Same deal, same
+         long ease-out, at ~55%. */
       v.value = withDelay(
-        i * 390,
-        withTiming(1, { duration: 1300, easing: Easing.bezier(0.16, 1, 0.3, 1) })
+        i * 210,
+        withTiming(1, { duration: 780, easing: Easing.bezier(0.16, 1, 0.3, 1) })
       );
     });
   }, [deal, intro, sweep]);
@@ -163,13 +172,15 @@ export default function App() {
        8.30, the heading slides in 8.30 -> 9.50 and the number drops in last
        near 9.20. So the reveal runs about 3.4s end to end, not 420ms — one
        linear clock, and each piece takes its own window out of it. */
-    railGo.value = withDelay(600, withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.cubic) }));
-    chrome.value = withTiming(1, { duration: 4600, easing: Easing.linear });
+    railGo.value = withDelay(250, withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.cubic) }));
+    chrome.value = withTiming(1, { duration: 2100, easing: Easing.linear });
   }, [expand, chrome, railGo, padTop, scrollY, scan]);
 
   const closeCard = useCallback(() => {
-    chrome.value = withTiming(0, { duration: 200 });
-    railGo.value = withTiming(0, { duration: 260 });
+    /* scaled with SHUT, so the chrome still clears ahead of the collapse
+       rather than all three ending together */
+    chrome.value = withTiming(0, { duration: 130 });
+    railGo.value = withTiming(0, { duration: 180 });
     expand.value = withTiming(0, SHUT, (done) => {
       if (done) runOnJS(setOpen)(null);
     });

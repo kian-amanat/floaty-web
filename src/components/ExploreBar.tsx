@@ -55,14 +55,15 @@ export default function ExploreBar({
     transform: [{ scaleX: Math.max(0.0001, Math.min(1, progress.value)) }],
   }));
 
-  /* settles in after the rest of the launch rather than being there from
-     frame one — subtle, no bounce */
+  /* Settles in just after the launch begins rather than waiting for the rest
+     of it: at a 900ms delay the bar was the last thing on screen to arrive,
+     which is most of why the opening felt slow. Still not on frame one. */
   const enter = useSharedValue(0);
   React.useEffect(() => {
     const run = (reduced: boolean) => {
       if (reduced) { enter.value = 1; return; }
-      enter.value = withDelay(900, withTiming(1, {
-        duration: 620, easing: Easing.bezier(0.22, 1, 0.36, 1),
+      enter.value = withDelay(250, withTiming(1, {
+        duration: 520, easing: Easing.bezier(0.22, 1, 0.36, 1),
       }));
     };
     run(false);

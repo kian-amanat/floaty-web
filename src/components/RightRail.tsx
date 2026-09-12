@@ -344,8 +344,11 @@ export default function RightRail({
      * DO NOT add another easing curve here — it would distort
      * the measured timeline.
      */
+    /* Still linear, for the reason above — the duration only sets how fast
+       the measured timeline is read, which is what brings the rail in at
+       1.4s rather than 2.6. */
     T.value = withTiming(2.6, {
-      duration: 2600,
+      duration: 1400,
       easing: Easing.linear,
     });
   }, [T, at]);
