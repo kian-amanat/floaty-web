@@ -19,9 +19,7 @@ import Animated, {
   useSharedValue, useAnimatedStyle, useFrameCallback, useDerivedValue,
 } from 'react-native-reanimated';
 import type { SharedValue } from 'react-native-reanimated';
-import Svg, {
-  Defs, Filter, FeGaussianBlur, RadialGradient, LinearGradient, Stop, Rect, Circle, G,
-} from 'react-native-svg';
+import Svg, { Defs, RadialGradient, LinearGradient, Stop, Rect, Circle } from 'react-native-svg';
 
 import { c } from './tokens';
 
@@ -130,18 +128,22 @@ function Mass({
     >
       <Svg width={size} height={size}>
         <Defs>
+          {/* The falloff is the gradient's own, not a blur of it. Each mass
+              used to be this gradient behind a gaussian at sigma = size * .08 —
+              on a 619px box that is a 991x991 filter region, and four of them
+              came to ~10Mpx of blur being recomposited on every frame of the
+              drift below, forever. Blurring a radial gradient mostly just
+              produces another radial gradient, so the stops carry the softness
+              directly and the filter is gone. */}
           <RadialGradient id={`m${i}`} cx="50%" cy="50%" r="50%">
-            <Stop offset="0" stopColor={m.hue} stopOpacity={0.9} />
-            <Stop offset="0.5" stopColor={m.hue} stopOpacity={0.3} />
+            <Stop offset="0" stopColor={m.hue} stopOpacity={0.82} />
+            <Stop offset="0.30" stopColor={m.hue} stopOpacity={0.46} />
+            <Stop offset="0.55" stopColor={m.hue} stopOpacity={0.19} />
+            <Stop offset="0.78" stopColor={m.hue} stopOpacity={0.05} />
             <Stop offset="1" stopColor={m.hue} stopOpacity={0} />
           </RadialGradient>
-          <Filter id={`f${i}`} x="-30%" y="-30%" width="160%" height="160%">
-            <FeGaussianBlur in="SourceGraphic" stdDeviation={size * 0.08} />
-          </Filter>
         </Defs>
-        <G filter={`url(#f${i})`}>
-          <Circle cx={size / 2} cy={size / 2} r={size * 0.4} fill={`url(#m${i})`} />
-        </G>
+        <Circle cx={size / 2} cy={size / 2} r={size / 2} fill={`url(#m${i})`} />
       </Svg>
     </Animated.View>
   );

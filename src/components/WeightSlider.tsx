@@ -103,6 +103,10 @@ const TAIL = 180;
    (.66/.475/.317/.205/.106/0 at 0/10/20/30/40/48px), then opened up a little
    from there: against the reference the fitted pair reads as a haze on the
    line rather than something lighting the ruler. */
+/* Filter regions are sized at 3 sigma, not 4: a gaussian has 99.7% of its
+   weight inside three, so the fourth is invisible and costs area. Across the
+   three passes that is about a fifth of the pixels blurred on every frame of a
+   drag, for no change on screen. */
 const HALO_W = 35;
 const HALO_SD = 19.5;
 /* A second, softer pass sits inside the halo so the peak reads as a
@@ -404,8 +408,8 @@ export default function WeightSlider({
             </Filter>
             <Filter
               id="spillBlur" filterUnits="userSpaceOnUse"
-              x={VIEW_X - SPILL_SD * 4} y={VIEW_Y - SPILL_SD * 4}
-              width={CANVAS_W + SPILL_SD * 8} height={CANVAS_H + SPILL_SD * 8}>
+              x={VIEW_X - SPILL_SD * 3} y={VIEW_Y - SPILL_SD * 3}
+              width={CANVAS_W + SPILL_SD * 6} height={CANVAS_H + SPILL_SD * 6}>
               <FeGaussianBlur stdDeviation={SPILL_SD} />
             </Filter>
             <Filter
