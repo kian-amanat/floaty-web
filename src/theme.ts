@@ -10,10 +10,26 @@ const win = Dimensions.get('window');
    before the window has a size, u() returns 0 for the rest of the session and
    every screen collapses silently, with no error to point at it. Falling back
    to the reference frame keeps the layout usable instead. */
-export const SCREEN = { w: win.width || REF_W, h: win.height || REF_H };
+const DEV_W = win.width || REF_W;
+const DEV_H = win.height || REF_H;
 
-/** reference units -> device points */
-export const u = (n: number) => (n * SCREEN.w) / REF_W;
+/* Fitted on whichever axis runs out first, not on width alone. Scaling by
+   width and letting the height fall where it may only holds while the device
+   has the reference's proportions: a 430x932 composition on a phone showing
+   414x715 of browser needs 897px of height and is given 715, so the foot of
+   it — where the explore bar lives — was pushed 182px off the bottom. */
+export const FIT = Math.min(DEV_W / REF_W, DEV_H / REF_H);
+
+/* The screen IS the reference frame; the whole tree is drawn at these numbers
+   and scaled once at the root. So every position, size and animation below is
+   computed in exactly the units the composition was authored in, on every
+   device — a phone gets the desktop's arrangement drawn smaller, rather than a
+   differently proportioned one. Only the margin around the stage varies. */
+export const SCREEN = { w: REF_W, h: REF_H };
+
+/** reference units -> device points. Identity: the root transform does the
+ *  scaling, so nothing downstream needs to know the device exists. */
+export const u = (n: number) => n;
 
 export const colors = {
   paper: '#FAF9F7',

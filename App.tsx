@@ -19,7 +19,8 @@ import AuthScreen from './src/ember/AuthScreen';
 import { useRoute, go } from './src/route';
 import { RECORDS } from './src/data';
 import {
-  colors, u, SCREEN, CARD, FOCUS_W, FOCUS_H, FOCUS_R, SLOT, FOCUS_Y, LEAD, REST_INDEX,
+  colors, u, SCREEN, REF_W, REF_H, FIT,
+  CARD, FOCUS_W, FOCUS_H, FOCUS_R, SLOT, FOCUS_Y, LEAD, REST_INDEX,
 } from './src/theme';
 
 /* Timed off the capture by counting the photo's pixels frame by frame and
@@ -46,7 +47,6 @@ export default function App() {
   const intro = useSharedValue(0);    // launch reveal of the left rail + badge
   const [open, setOpen] = useState<number | null>(null);
   const view = useRoute();
-  const [barFloating, setBarFloating] = useState(false);
 
   /* the column deals itself out on launch — one shared value per card, so the
      hook count stays fixed regardless of how the list is edited */
@@ -165,7 +165,6 @@ export default function App() {
     const cy = padTop + u(LEAD) + i * u(SLOT) + u(SLOT) / 2 - scrollY.value;
     setOrigin({ left: SCREEN.w / 2 - w / 2, top: cy - h / 2, w, h, r });
     setOpen(i);
-    setBarFloating(true);
     expand.value = withTiming(1, OPEN);
     /* Read off the capture, with the pick starting at 6.40: the mark is gone
        by 7.10, the clock and date by 7.70, the foot caption fades up around
@@ -184,7 +183,6 @@ export default function App() {
     expand.value = withTiming(0, SHUT, (done) => {
       if (done) runOnJS(setOpen)(null);
     });
-    setBarFloating(false);
   }, [expand, chrome, railGo]);
 
   /* The tab's three marks. The capture shows the selected state but never a
@@ -274,6 +272,9 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
+      {/* Drawn at the reference size and scaled as one piece, so a phone gets
+          the desktop's arrangement rather than its own. */}
+      <View style={styles.stage}>
       <StatusBar style={open === null ? 'dark' : 'light'} />
 
       <Animated.View style={[StyleSheet.absoluteFill, homeStyle]}>
@@ -325,14 +326,25 @@ export default function App() {
             once a background has been picked */}
         {/* the pill only exists over a photo — on the paper home screen the
             capture shows the controls sitting bare, no white slab */}
-        <ExploreBar progress={progress} floating={barFloating} />
+        <ExploreBar progress={progress} />
+      </View>
       </View>
     </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center' },
+  stage: {
+    width: REF_W,
+    height: REF_H,
+    overflow: 'hidden',
+    /* yoga will happily squeeze a 430-wide child into a 414-wide parent, which
+       breaks the layout before the transform ever gets to scale it */
+    flexShrink: 0,
+    flexGrow: 0,
+    transform: [{ scale: FIT }],
+  },
   gooeyRoot: { flex: 1, backgroundColor: '#dddddd' },
   authRoot: { flex: 1, backgroundColor: '#000000' },
   weightRoot: { flex: 1, backgroundColor: '#222322' },

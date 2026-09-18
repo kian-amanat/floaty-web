@@ -18,9 +18,16 @@ import { colors, mono, u } from '../theme';
      58 X      x 347 -> 365 — and notably it sits at y ~893, BELOW the centre
                line rather than on it, tucked into the lower right.
    Bottom inset is 23, so the pill clears the phone edge. */
-const PILL_W = 391;
+/* Off the reference: the bar is a rounded card with a clear margin either
+   side, not a band running the full width — about 0.86 of the frame, with a
+   radius a little over a quarter of its height. */
+const PILL_W = 386;
+/* everything in the row that is not the track: 16 + 24 + 15 + ~45 + 33
+   + 5.5 + 4 + 4 + 5.5 + 15. Moves with the paddings below — the track is
+   sized from it, so the two cannot drift apart and push content out. */
+const ROW_FURNITURE = 167;
 const PILL_H = 72;
-const RADIUS = 15;
+const RADIUS = 20;
 
 function Bracket() {
   return (
@@ -35,14 +42,17 @@ export default function ExploreBar({
   progress,
   label = 'EXPLORE',
   readout = '58 X',
-  floating = false,
 }: {
   progress: SharedValue<number>;
   label?: string;
   readout?: string;
-  floating?: boolean;
 }) {
-  const trackW = u(234);
+  /* The row is fixed detail either side of the track — paddings, burger,
+     label, brackets — so the track is what has to give when the card's width
+     changes. These two move together: narrowing PILL_W without taking the
+     same off here pushes the right-hand bracket and the readout out past the
+     card's edge, which is exactly what it did. */
+  const trackW = u(PILL_W - ROW_FURNITURE);
 
   const handle = useAnimatedStyle(() => ({
     transform: [
@@ -85,7 +95,7 @@ export default function ExploreBar({
   }));
 
   return (
-    <Animated.View style={[styles.pill, floating && styles.floating, settle]}>
+    <Animated.View style={[styles.pill, settle]}>
       {/* the main row runs on the pill's centre line */}
       <View style={styles.row}>
         <View style={styles.burger}>
@@ -113,13 +123,15 @@ export default function ExploreBar({
 }
 
 const styles = StyleSheet.create({
+  /* The whole appearance lives here rather than half of it arriving with
+     `floating`: the radius and the shadow used to be on that variant alone, so
+     on the home screen the bar was a square-cornered white band and only
+     became the card on the detail screen. It is the same object in both. */
   pill: {
     width: u(PILL_W),
     height: u(PILL_H),
     alignSelf: 'center',
     justifyContent: 'center',
-  },
-  floating: {
     backgroundColor: colors.white,
     borderRadius: u(RADIUS),
     shadowColor: '#000',
@@ -132,7 +144,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingLeft: u(16),
-    paddingRight: u(5),
+    /* the right bracket gets the same breathing room off the edge as the
+       burger has on the left, rather than sitting almost against it */
+    paddingRight: u(15),
   },
   burger: { width: u(24), gap: u(3) },
   burgerLine: { height: u(2), backgroundColor: colors.ink },
