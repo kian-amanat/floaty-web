@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, {
   Path, Circle, Rect, Defs, Mask, Stop, G, ClipPath,
-  LinearGradient, RadialGradient, Polygon, Filter, FeGaussianBlur,
+  LinearGradient, RadialGradient, Polygon,
 } from 'react-native-svg';
 
 /* Vertical weight dial, measured off the reference capture (640x480 @30fps)
@@ -114,17 +114,20 @@ const TAIL = 180;
    That takes the three passes from ~2.8 Mpx a frame to ~0.75 at dpr 2, on a
    filter that reruns on every frame of a drag. Nothing about the result
    changes; the pixels that went away were never on screen. */
+/* the line's x at the thumb — the bend always peaks there, so the horizontal
+   falloff is anchored to where the glow is actually brightest */
+const GLOW_EDGE = TRACK_X - BEND_A;
 const GLOW_X = VIEW_X;
-const GLOW_W = TRACK_X + 8 - VIEW_X;
-const HALO_W = 35;
-const HALO_SD = 19.5;
+
+/* The three passes were strokes of width 46 / 30 / 19 blurred at sigma
+   33 / 19.5 / 11, at opacity .72 / 1 / .82. Those pairs are gone but they are
+   what the gradient stops below were computed from — the profile of a stroke
+   of width W under sigma s at distance d is
+       .5 * (erf((d + W/2) / (s*sqrt2)) - erf((d - W/2) / (s*sqrt2)))
+   normalised to its value on the line. Re-derive from there if a pass wants
+   reshaping; do not hand-edit the stops. */
 /* A second, softer pass sits inside the halo so the peak reads as a
-   concentrated source rather than an evenly-lit patch. Same blurred-line
-   construction, so the two merge into one falloff instead of banding. Kept
-   wide and low-opacity on purpose: at a tight sigma it stopped being a peak
-   and became a visible second line hugging the first. */
-const CORE_W = 14;
-const CORE_SD = 11;
+   concentrated source rather than an evenly-lit patch. */
 const CORE_REACH = 58;
 const HALO_UP = 95;                               // fade reaches this far above
 const HALO_DOWN = 95;                             // and this far below
@@ -137,11 +140,8 @@ const HALO_DOWN = 95;                             // and this far below
    flattens the whole thing into an even wash with no source in it.
    Taller as well as wider: a lamp spills further along the line than across
    it, so this reaches past the labels either side of the thumb. */
-const SPILL_W = 46;
-const SPILL_SD = 33;
 const SPILL_UP = 150;
 const SPILL_DOWN = 150;
-const SPILL_OPACITY = 0.72;
 
 const PAGE = '#222322';
 const TRACK = '#767676';
@@ -409,21 +409,63 @@ export default function WeightSlider({
             {/* the glow is shaped by a mask and coloured by the rect beneath
                 it, so it tracks the accent — a fixed yellow here left the halo
                 yellow while the line and readout had gone lime */}
-            <Filter
-              id="haloBlur" filterUnits="userSpaceOnUse"
-              x={GLOW_X} y={VIEW_Y} width={GLOW_W} height={CANVAS_H}>
-              <FeGaussianBlur stdDeviation={HALO_SD} />
-            </Filter>
-            <Filter
-              id="spillBlur" filterUnits="userSpaceOnUse"
-              x={GLOW_X} y={VIEW_Y} width={GLOW_W} height={CANVAS_H}>
-              <FeGaussianBlur stdDeviation={SPILL_SD} />
-            </Filter>
-            <Filter
-              id="coreBlur" filterUnits="userSpaceOnUse"
-              x={GLOW_X} y={VIEW_Y} width={GLOW_W} height={CANVAS_H}>
-              <FeGaussianBlur stdDeviation={CORE_SD} />
-            </Filter>
+            {/* The glow was three gaussian-blurred strokes. On iOS Safari an SVG
+                filter is rasterised near the element's user space and then
+                scaled up to the device, and this Svg is a 342-unit viewBox
+                stretched to the full screen — so the falloff arrived as visible
+                contour bands instead of a gradient, and re-blurring three
+                passes every frame made the drag stutter. Desktop Chrome rasterises
+                at device resolution, which is why it only showed on the phone.
+
+                These gradients ARE the blur: each stop is the exact 1D profile
+                of that stroke convolved with its own sigma, computed off
+                erf((d±W/2)/(sigma*sqrt2)). Same curve, no filter, no
+                per-frame raster, and identical on every browser. */}
+            <LinearGradient
+              id="spillFall" gradientUnits="userSpaceOnUse"
+              x1={GLOW_EDGE} y1={0} x2={GLOW_EDGE - 86} y2={0}
+            >
+              <Stop offset="0.0" stopColor={accent} stopOpacity={0.72} />
+              <Stop offset="0.111" stopColor={accent} stopOpacity={0.668} />
+              <Stop offset="0.222" stopColor={accent} stopOpacity={0.533} />
+              <Stop offset="0.333" stopColor={accent} stopOpacity={0.365} />
+              <Stop offset="0.444" stopColor={accent} stopOpacity={0.215} />
+              <Stop offset="0.556" stopColor={accent} stopOpacity={0.108} />
+              <Stop offset="0.667" stopColor={accent} stopOpacity={0.046} />
+              <Stop offset="0.778" stopColor={accent} stopOpacity={0.017} />
+              <Stop offset="0.889" stopColor={accent} stopOpacity={0.005} />
+              <Stop offset="1" stopColor={accent} stopOpacity={0.0} />
+            </LinearGradient>
+            <LinearGradient
+              id="haloFall" gradientUnits="userSpaceOnUse"
+              x1={GLOW_EDGE} y1={0} x2={GLOW_EDGE - 56} y2={0}
+            >
+              <Stop offset="0.0" stopColor={accent} stopOpacity={1.0} />
+              <Stop offset="0.111" stopColor={accent} stopOpacity={0.918} />
+              <Stop offset="0.222" stopColor={accent} stopOpacity={0.711} />
+              <Stop offset="0.333" stopColor={accent} stopOpacity={0.463} />
+              <Stop offset="0.444" stopColor={accent} stopOpacity={0.253} />
+              <Stop offset="0.556" stopColor={accent} stopOpacity={0.115} />
+              <Stop offset="0.667" stopColor={accent} stopOpacity={0.044} />
+              <Stop offset="0.778" stopColor={accent} stopOpacity={0.014} />
+              <Stop offset="0.889" stopColor={accent} stopOpacity={0.004} />
+              <Stop offset="1" stopColor={accent} stopOpacity={0.0} />
+            </LinearGradient>
+            <LinearGradient
+              id="coreFall" gradientUnits="userSpaceOnUse"
+              x1={GLOW_EDGE} y1={0} x2={GLOW_EDGE - 30} y2={0}
+            >
+              <Stop offset="0.0" stopColor={accent} stopOpacity={0.82} />
+              <Stop offset="0.111" stopColor={accent} stopOpacity={0.77} />
+              <Stop offset="0.222" stopColor={accent} stopOpacity={0.636} />
+              <Stop offset="0.333" stopColor={accent} stopOpacity={0.462} />
+              <Stop offset="0.444" stopColor={accent} stopOpacity={0.294} />
+              <Stop offset="0.556" stopColor={accent} stopOpacity={0.163} />
+              <Stop offset="0.667" stopColor={accent} stopOpacity={0.079} />
+              <Stop offset="0.778" stopColor={accent} stopOpacity={0.033} />
+              <Stop offset="0.889" stopColor={accent} stopOpacity={0.012} />
+              <Stop offset="1" stopColor={accent} stopOpacity={0.0} />
+            </LinearGradient>
             <AGradient id="coreFade" gradientUnits="userSpaceOnUse"
                        x1={0} x2={0} animatedProps={core}>
               <Stop offset="0" stopColor="#000000" />
@@ -499,31 +541,18 @@ export default function WeightSlider({
 
           {/* the glow sits over the ruler so the ticks near the thumb light up,
               and under the line so the line stays the brightest thing */}
-          {/* blurred first, then clipped — so the haze is symmetric about the
-              line and simply stops at it, with nothing on the knob side */}
+          {/* Each pass is its falloff painted straight on, then clipped to the
+              line and masked by the same vertical envelope as before — so the
+              haze still stops dead at the line with nothing on the knob side,
+              and still peaks at the thumb. */}
           <G clipPath="url(#leftOfLine)" mask="url(#spillMask)">
-            <APath
-              animatedProps={line}
-              stroke={accent} strokeWidth={SPILL_W} strokeOpacity={SPILL_OPACITY}
-              fill="none" strokeLinecap="butt"
-              filter="url(#spillBlur)"
-            />
+            <Rect x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H} fill="url(#spillFall)" />
           </G>
           <G clipPath="url(#leftOfLine)" mask="url(#haloMask)">
-            <APath
-              animatedProps={line}
-              stroke={accent} strokeWidth={HALO_W}
-              fill="none" strokeLinecap="butt"
-              filter="url(#haloBlur)"
-            />
+            <Rect x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H} fill="url(#haloFall)" />
           </G>
           <G clipPath="url(#leftOfLine)" mask="url(#coreMask)">
-            <APath
-              animatedProps={line}
-              stroke={accent} strokeWidth={CORE_W} strokeOpacity={0.82}
-              fill="none" strokeLinecap="butt"
-              filter="url(#coreBlur)"
-            />
+            <Rect x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H} fill="url(#coreFall)" />
           </G>
 
           <APath
