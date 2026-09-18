@@ -86,8 +86,13 @@ const LABEL_W = 56;
    own cliff reads nearer 190, but its thumb only ever travels 11..26 so it
    never puts a numeric label much beyond 220; this is the asked-for behaviour
    across the full 0..36 range. */
-const LABEL_OUT = 315;                            // gone by here
-const LABEL_OUT_FADE = 50;                        // over this much
+/* Measured off the capture: at 21 the '6' is 166px from the thumb and still
+   reading, at 25 it is 211px away and gone. So the cliff sits just under 211
+   and the fade runs the ~45px before it. The old 315 was further than the
+   ruler is long (36 lb = 399px), so in practice nothing was ever culled —
+   which is why every label stayed lit at the top of the range. */
+const LABEL_OUT = 205;                            // gone by here
+const LABEL_OUT_FADE = 45;                        // over this much
 /* accent holds .98 at 85px above the thumb, .87 at 100, .59 at 130, gone by 170 */
 const TAIL = 180;
 
@@ -117,6 +122,13 @@ const TAIL = 180;
 /* the line's x at the thumb — the bend always peaks there, so the horizontal
    falloff is anchored to where the glow is actually brightest */
 const GLOW_EDGE = TRACK_X - BEND_A;
+/* how far the haze carries from the thumb, and how hard it is at the centre */
+const GLOW_R = 70;
+/* How far past the end marks the haze is allowed to reach. Short, so at 0 or
+   36 the light is visibly stopped by the end of the ruler rather than floating
+   in the margin — but not zero, or the boundary is a cut. */
+const GLOW_EDGE_FEATHER = 10;
+const GLOW_PEAK = 0.80;
 const GLOW_X = VIEW_X;
 
 /* The three passes were strokes of width 46 / 30 / 19 blurred at sigma
@@ -128,9 +140,6 @@ const GLOW_X = VIEW_X;
    reshaping; do not hand-edit the stops. */
 /* A second, softer pass sits inside the halo so the peak reads as a
    concentrated source rather than an evenly-lit patch. */
-const CORE_REACH = 58;
-const HALO_UP = 95;                               // fade reaches this far above
-const HALO_DOWN = 95;                             // and this far below
 
 /* Outside the halo sits a much wider, dimmer spill. The halo alone reads as a
    haze clinging to the line; what the reference has is a lamp behind it, with
@@ -140,8 +149,6 @@ const HALO_DOWN = 95;                             // and this far below
    flattens the whole thing into an even wash with no source in it.
    Taller as well as wider: a lamp spills further along the line than across
    it, so this reaches past the labels either side of the thumb. */
-const SPILL_UP = 150;
-const SPILL_DOWN = 150;
 
 const PAGE = '#222322';
 const TRACK = '#767676';
@@ -196,6 +203,7 @@ function accentFor(v: number) {
 
 const APath = Animated.createAnimatedComponent(Path);
 const AGradient = Animated.createAnimatedComponent(LinearGradient);
+const ARadial = Animated.createAnimatedComponent(RadialGradient);
 const AText = Animated.createAnimatedComponent(Text);
 
 const yFor = (v: number) => {
@@ -344,21 +352,11 @@ export default function WeightSlider({
     y1: knobY.value - TAIL,
     y2: knobY.value,
   }));
-  const halo = useAnimatedProps(() => ({
-    y1: knobY.value - HALO_UP,
-    y2: knobY.value + HALO_DOWN,
-  }));
-  const core = useAnimatedProps(() => ({
-    y1: knobY.value - CORE_REACH,
-    y2: knobY.value + CORE_REACH,
-  }));
-  const spill = useAnimatedProps(() => ({
-    y1: knobY.value - SPILL_UP,
-    y2: knobY.value + SPILL_DOWN,
-  }));
   const majorTicks = useAnimatedProps(() => ({ d: ticksPath(knobY.value, true) }));
   const minorTicks = useAnimatedProps(() => ({ d: ticksPath(knobY.value, false) }));
   const leftRegion = useAnimatedProps(() => ({ d: leftOfLinePath(knobY.value) }));
+  /* the glow is centred on the line at the thumb, so only cy moves */
+  const glowAt = useAnimatedProps(() => ({ cy: knobY.value }));
   const knob = useAnimatedStyle(() => ({
     transform: [{ translateY: (knobY.value - KNOB_R - KNOB_PAD - VIEW_Y) * S }],
   }));
@@ -421,108 +419,57 @@ export default function WeightSlider({
                 of that stroke convolved with its own sigma, computed off
                 erf((d±W/2)/(sigma*sqrt2)). Same curve, no filter, no
                 per-frame raster, and identical on every browser. */}
-            <LinearGradient
-              id="spillFall" gradientUnits="userSpaceOnUse"
-              x1={GLOW_EDGE} y1={0} x2={GLOW_EDGE - 86} y2={0}
+            {/* Measured off the capture at 18 lbs: walking out from the thumb
+                the haze reaches ~65px to the left and ~65px up and down, so it
+                is one radial falloff centred on the line — a semicircle, the
+                line itself being the flat side — rather than a sideways ramp
+                crossed with a vertical envelope. Those two were separable and
+                this is not, which is why the old shape read as a lit band and
+                this reads as a lamp. Stops are the measured profile normalised
+                against its own peak. */}
+            <ARadial
+              id="glowFall" gradientUnits="userSpaceOnUse"
+              cx={GLOW_EDGE} r={GLOW_R}
+              animatedProps={glowAt}
             >
-              <Stop offset="0.0" stopColor={accent} stopOpacity={0.72} />
-              <Stop offset="0.111" stopColor={accent} stopOpacity={0.668} />
-              <Stop offset="0.222" stopColor={accent} stopOpacity={0.533} />
-              <Stop offset="0.333" stopColor={accent} stopOpacity={0.365} />
-              <Stop offset="0.444" stopColor={accent} stopOpacity={0.215} />
-              <Stop offset="0.556" stopColor={accent} stopOpacity={0.108} />
-              <Stop offset="0.667" stopColor={accent} stopOpacity={0.046} />
-              <Stop offset="0.778" stopColor={accent} stopOpacity={0.017} />
-              <Stop offset="0.889" stopColor={accent} stopOpacity={0.005} />
-              <Stop offset="1" stopColor={accent} stopOpacity={0.0} />
-            </LinearGradient>
+              {/* No flat run at the middle. The profile was sampled from 10px
+                  out, and carrying its first reading back to the centre as a
+                  plateau painted a 10px disc at full opacity — which is the
+                  hard bright circle sitting in the peak. It falls away from
+                  zero instead, so the centre is the top of a curve rather than
+                  the face of a disc. */}
+              <Stop offset="0" stopColor={accent} stopOpacity={GLOW_PEAK} />
+              <Stop offset="0.14" stopColor={accent} stopOpacity={GLOW_PEAK * 0.88} />
+              <Stop offset="0.29" stopColor={accent} stopOpacity={GLOW_PEAK * 0.658} />
+              <Stop offset="0.43" stopColor={accent} stopOpacity={GLOW_PEAK * 0.439} />
+              <Stop offset="0.57" stopColor={accent} stopOpacity={GLOW_PEAK * 0.268} />
+              <Stop offset="0.71" stopColor={accent} stopOpacity={GLOW_PEAK * 0.123} />
+              <Stop offset="0.86" stopColor={accent} stopOpacity={GLOW_PEAK * 0.043} />
+              <Stop offset="1" stopColor={accent} stopOpacity={0} />
+            </ARadial>
+            {/* The envelopes are centred on the thumb, so near either end of
+                the ruler they run off the canvas and are cut by its edge — a
+                bright band sitting against the top rather than a fade. This
+                caps all three to the ruler's own span, feathered so the glow
+                is still at full strength when the thumb is on the last mark. */}
             <LinearGradient
-              id="haloFall" gradientUnits="userSpaceOnUse"
-              x1={GLOW_EDGE} y1={0} x2={GLOW_EDGE - 56} y2={0}
+              id="edgeFadeGrad" gradientUnits="userSpaceOnUse"
+              x1={0} y1={VIEW_Y} x2={0} y2={VIEW_Y + CANVAS_H}
             >
-              <Stop offset="0.0" stopColor={accent} stopOpacity={1.0} />
-              <Stop offset="0.111" stopColor={accent} stopOpacity={0.918} />
-              <Stop offset="0.222" stopColor={accent} stopOpacity={0.711} />
-              <Stop offset="0.333" stopColor={accent} stopOpacity={0.463} />
-              <Stop offset="0.444" stopColor={accent} stopOpacity={0.253} />
-              <Stop offset="0.556" stopColor={accent} stopOpacity={0.115} />
-              <Stop offset="0.667" stopColor={accent} stopOpacity={0.044} />
-              <Stop offset="0.778" stopColor={accent} stopOpacity={0.014} />
-              <Stop offset="0.889" stopColor={accent} stopOpacity={0.004} />
-              <Stop offset="1" stopColor={accent} stopOpacity={0.0} />
+              {/* Black everywhere past the ruler, ramping to full across the
+                  last few pixels before the end mark — so the thumb is still
+                  fully lit on 0 and 36, and the haze is cut off by the end of
+                  the instrument instead of hanging in the margin. */}
+              <Stop offset="0" stopColor="#000000" />
+              <Stop offset={`${(TRACK_TOP - VIEW_Y - GLOW_EDGE_FEATHER) / CANVAS_H}`} stopColor="#000000" />
+              <Stop offset={`${(TRACK_TOP - VIEW_Y) / CANVAS_H}`} stopColor="#FFFFFF" />
+              <Stop offset={`${(TRACK_BOT - VIEW_Y) / CANVAS_H}`} stopColor="#FFFFFF" />
+              <Stop offset={`${(TRACK_BOT - VIEW_Y + GLOW_EDGE_FEATHER) / CANVAS_H}`} stopColor="#000000" />
+              <Stop offset="1" stopColor="#000000" />
             </LinearGradient>
-            <LinearGradient
-              id="coreFall" gradientUnits="userSpaceOnUse"
-              x1={GLOW_EDGE} y1={0} x2={GLOW_EDGE - 30} y2={0}
-            >
-              <Stop offset="0.0" stopColor={accent} stopOpacity={0.82} />
-              <Stop offset="0.111" stopColor={accent} stopOpacity={0.77} />
-              <Stop offset="0.222" stopColor={accent} stopOpacity={0.636} />
-              <Stop offset="0.333" stopColor={accent} stopOpacity={0.462} />
-              <Stop offset="0.444" stopColor={accent} stopOpacity={0.294} />
-              <Stop offset="0.556" stopColor={accent} stopOpacity={0.163} />
-              <Stop offset="0.667" stopColor={accent} stopOpacity={0.079} />
-              <Stop offset="0.778" stopColor={accent} stopOpacity={0.033} />
-              <Stop offset="0.889" stopColor={accent} stopOpacity={0.012} />
-              <Stop offset="1" stopColor={accent} stopOpacity={0.0} />
-            </LinearGradient>
-            <AGradient id="coreFade" gradientUnits="userSpaceOnUse"
-                       x1={0} x2={0} animatedProps={core}>
-              <Stop offset="0" stopColor="#000000" />
-              <Stop offset="0.25" stopColor="#3D3D3D" />
-              <Stop offset="0.5" stopColor="#FFFFFF" />
-              <Stop offset="0.75" stopColor="#3D3D3D" />
-              <Stop offset="1" stopColor="#000000" />
-            </AGradient>
-            <Mask id="coreMask" maskUnits="userSpaceOnUse"
+            <Mask id="edgeFade" maskUnits="userSpaceOnUse"
                   x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H}>
-              <Rect x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H} fill="url(#coreFade)" />
-            </Mask>
-            {/* Fade along the line. The brightest point is the peak of the
-                curve itself: integrating each row's glow left of the line puts
-                the maximum at dy -1. An earlier profile sampled a fixed 10px
-                from the line, but the line MOVES, so at dy -23 it was reading
-                the bend peak and at dy 0 it was 10px past it — which faked a
-                peak above the thumb. It is symmetric about the thumb:
-                averaging the two sides gives 1.0/.78/.75/.64/.47/.29/.15/.07/0
-                at 0/10/20/40/50/60/70/80/95, and the apparent lean upward in
-                the raw samples is tick and label brightness inside the
-                integration window, not the glow itself. */}
-            <AGradient id="haloFade" gradientUnits="userSpaceOnUse"
-                       x1={0} x2={0} animatedProps={halo}>
-              <Stop offset="0" stopColor="#000000" />
-              <Stop offset="0.13" stopColor="#171717" />
-              <Stop offset="0.26" stopColor="#3D3D3D" />
-              <Stop offset="0.37" stopColor="#757575" />
-              <Stop offset="0.45" stopColor="#B3B3B3" />
-              <Stop offset="0.5" stopColor="#FFFFFF" />
-              <Stop offset="0.55" stopColor="#B3B3B3" />
-              <Stop offset="0.63" stopColor="#757575" />
-              <Stop offset="0.74" stopColor="#3D3D3D" />
-              <Stop offset="0.87" stopColor="#171717" />
-              <Stop offset="1" stopColor="#000000" />
-            </AGradient>
-            {/* the spill's own envelope — same shape as the halo's, just
-                carried much further along the line */}
-            <AGradient id="spillFade" gradientUnits="userSpaceOnUse"
-                       x1={0} x2={0} animatedProps={spill}>
-              <Stop offset="0" stopColor="#000000" />
-              <Stop offset="0.18" stopColor="#1F1F1F" />
-              <Stop offset="0.32" stopColor="#4A4A4A" />
-              <Stop offset="0.42" stopColor="#8A8A8A" />
-              <Stop offset="0.5" stopColor="#FFFFFF" />
-              <Stop offset="0.58" stopColor="#8A8A8A" />
-              <Stop offset="0.68" stopColor="#4A4A4A" />
-              <Stop offset="0.82" stopColor="#1F1F1F" />
-              <Stop offset="1" stopColor="#000000" />
-            </AGradient>
-            <Mask id="spillMask" maskUnits="userSpaceOnUse"
-                  x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H}>
-              <Rect x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H} fill="url(#spillFade)" />
-            </Mask>
-            <Mask id="haloMask" maskUnits="userSpaceOnUse"
-                  x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H}>
-              <Rect x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H} fill="url(#haloFade)" />
+              <Rect x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H} fill="url(#edgeFadeGrad)" />
             </Mask>
             <ClipPath id="leftOfLine">
               <APath animatedProps={leftRegion} />
@@ -545,14 +492,12 @@ export default function WeightSlider({
               line and masked by the same vertical envelope as before — so the
               haze still stops dead at the line with nothing on the knob side,
               and still peaks at the thumb. */}
-          <G clipPath="url(#leftOfLine)" mask="url(#spillMask)">
-            <Rect x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H} fill="url(#spillFall)" />
-          </G>
-          <G clipPath="url(#leftOfLine)" mask="url(#haloMask)">
-            <Rect x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H} fill="url(#haloFall)" />
-          </G>
-          <G clipPath="url(#leftOfLine)" mask="url(#coreMask)">
-            <Rect x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H} fill="url(#coreFall)" />
+          {/* clipped so it stops dead at the line with nothing on the knob
+              side, and capped so it cannot spill past either end of the ruler */}
+          <G mask="url(#edgeFade)">
+            <G clipPath="url(#leftOfLine)">
+              <Rect x={VIEW_X} y={VIEW_Y} width={CANVAS_W} height={CANVAS_H} fill="url(#glowFall)" />
+            </G>
           </G>
 
           <APath
